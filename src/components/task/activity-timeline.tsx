@@ -33,7 +33,7 @@ const ICONS: Record<ActivityAction, LucideIcon> = {
   moved: MoveRight,
 };
 
-const FIELD_LABELS: Record<string, string> = {
+export const FIELD_LABELS: Record<string, string> = {
   acceptanceCriteria: "acceptance criteria",
   definitionOfDone: "definition of done",
   finalSummary: "final summary",
@@ -43,6 +43,14 @@ const FIELD_LABELS: Record<string, string> = {
   dependsOn: "depends on",
   isDraft: "draft",
 };
+
+/** Internal bookkeeping fields that mean nothing to a reader (board position, child ref counter). */
+const HIDDEN_FIELDS = new Set(["ordinal", "childCounter"]);
+
+/** The changes worth showing a person. */
+export function visibleChanges(changes: FieldChanges | null | undefined): FieldChanges {
+  return Object.fromEntries(Object.entries(changes ?? {}).filter(([k]) => !HIDDEN_FIELDS.has(k)));
+}
 
 /** Human text for one side of a diff. */
 export function formatValue(v: unknown, max = 120): string {
@@ -54,8 +62,9 @@ export function formatValue(v: unknown, max = 120): string {
 }
 const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
-function Diff({ changes }: { changes: FieldChanges }) {
-  const entries = Object.entries(changes);
+/** Field diff (from → to) with readable field names. Shared by the task and the global activity timelines. */
+export function Diff({ changes }: { changes: FieldChanges }) {
+  const entries = Object.entries(visibleChanges(changes));
   if (!entries.length) return null;
   return (
     <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 rounded-md bg-surface-2 px-2 py-1.5 text-xs">
@@ -101,7 +110,7 @@ export function ActivityTimeline({ items, initial = 15 }: { items: Activity[]; i
 
 function ActivityRow({ a }: { a: Activity }) {
   const Icon = ICONS[a.action] ?? CircleDot;
-  const n = Object.keys(a.changes ?? {}).length;
+  const n = Object.keys(visibleChanges(a.changes)).length;
   const [open, setOpen] = useState(false);
   return (
     <li className="relative flex gap-2.5">

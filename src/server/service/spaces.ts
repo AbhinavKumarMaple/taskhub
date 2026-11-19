@@ -1,10 +1,10 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { getDb } from "../db";
+import { getDb, type DbOrTx } from "../db";
 import { spaces, tasks } from "../db/schema";
 import { Conflict } from "../errors";
 import { createSpaceInput, listSpacesInput, parse, spaceId as spaceIdSchema, updateSpaceInput } from "../validation";
 import type { Access, Space, SpaceColor, SpaceWithCounts } from "@/lib/types";
-import { assertSpace, diff, loadSpace, logActivity, newSpaceId, newSpaceKey, withTx } from "./context";
+import { diff, loadSpace, logActivity, newSpaceId, newSpaceKey, withTx } from "./context";
 import { loadSettings } from "./settings";
 
 function shape(row: typeof spaces.$inferSelect): Space {
@@ -19,18 +19,25 @@ function shape(row: typeof spaces.$inferSelect): Space {
   };
 }
 
-function isUniqueViolation(err: unknown): boolean {
-  const e = err as { code?: string; cause?: { code?: string } };
-  return e?.code === "23505" || e?.cause?.code === "23505";
-}
-
-async function assertNameFree(name: string, exceptId?: string) {
-  const db = await getDb();
-  const [row] = await db
+/**
+ * Names are unique (ignoring case) among the Spaces the caller can see: every Space for the owner, only
+ * the Spaces whose keys it holds for a chat. A chat therefore cannot learn whether a hidden Space
+ * has a given name.
+ */
+async function assertNameFree(q: DbOrTx, access: Access, name: string, exceptId?: string) {
+  if (access.spaces !== "all" && access.spaces.length === 0) return;
+  const [row] = await q
     .select({ id: spaces.id })
     .from(spaces)
-    .where(sql`lower(${spaces.name}) = lower(${name})`);
-  if (row && row.id !== exceptId) throw new Conflict(`A Space named "${name}" already exists`);
+    .where(
+      and(
+        sql`lower(${spaces.name}) = lower(${name})`,
+        access.spaces === "all" ? undefined : inArray(spaces.id, access.spaces),
+        exceptId ? sql`${spaces.id} <> ${exceptId}` : undefined,
+      ),
+    )
+    .limit(1);
+  if (row) throw new Conflict(`A Space named "${name}" already exists`);
 }
 
 /**
@@ -42,32 +49,27 @@ export async function createSpace(
   input: { name: string; description?: string; color?: SpaceColor },
 ): Promise<Space> {
   const p = parse(createSpaceInput, input);
-  await assertNameFree(p.name);
-  try {
-    return await withTx(async (tx) => {
-      const [row] = await tx
-        .insert(spaces)
-        .values({
-          id: newSpaceId(),
-          key: newSpaceKey(),
-          name: p.name,
-          description: p.description ?? "",
-          color: p.color ?? "blue",
-        })
-        .returning();
-      await logActivity(tx, access, {
-        spaceId: row.id,
-        entityType: "space",
-        entityRef: row.id,
-        action: "created",
-        summary: `Created Space "${row.name}"`,
-      });
-      return shape(row);
+  return withTx(async (tx) => {
+    await assertNameFree(tx, access, p.name);
+    const [row] = await tx
+      .insert(spaces)
+      .values({
+        id: newSpaceId(),
+        key: newSpaceKey(),
+        name: p.name,
+        description: p.description ?? "",
+        color: p.color ?? "blue",
+      })
+      .returning();
+    await logActivity(tx, access, {
+      spaceId: row.id,
+      entityType: "space",
+      entityRef: row.id,
+      action: "created",
+      summary: `Created Space "${row.name}"`,
     });
-  } catch (err) {
-    if (isUniqueViolation(err)) throw new Conflict(`A Space named "${p.name}" already exists`);
-    throw err;
-  }
+    return shape(row);
+  });
 }
 
 /** The caller's Spaces with task counts, by name. */
@@ -124,30 +126,22 @@ export async function updateSpace(
 ): Promise<Space> {
   const sid = parse(spaceIdSchema, id);
   const p = parse(updateSpaceInput, input);
-  if (p.name) {
-    assertSpace(access, sid, "Space not found");
-    await assertNameFree(p.name, sid);
-  }
-  try {
-    return await withTx(async (tx) => {
-      const cur = await loadSpace(tx, access, sid);
-      const changes = diff(cur, p);
-      if (!Object.keys(changes).length) return shape(cur);
-      const [row] = await tx.update(spaces).set(p).where(eq(spaces.id, sid)).returning();
-      await logActivity(tx, access, {
-        spaceId: sid,
-        entityType: "space",
-        entityRef: sid,
-        action: "updated",
-        summary: changes.name ? `Renamed Space "${cur.name}" to "${row.name}"` : `Updated Space "${row.name}"`,
-        changes,
-      });
-      return shape(row);
+  return withTx(async (tx) => {
+    const cur = await loadSpace(tx, access, sid);
+    if (p.name) await assertNameFree(tx, access, p.name, sid);
+    const changes = diff(cur, p);
+    if (!Object.keys(changes).length) return shape(cur);
+    const [row] = await tx.update(spaces).set(p).where(eq(spaces.id, sid)).returning();
+    await logActivity(tx, access, {
+      spaceId: sid,
+      entityType: "space",
+      entityRef: sid,
+      action: "updated",
+      summary: changes.name ? `Renamed Space "${cur.name}" to "${row.name}"` : `Updated Space "${row.name}"`,
+      changes,
     });
-  } catch (err) {
-    if (isUniqueViolation(err)) throw new Conflict(`A Space named "${p.name}" already exists`);
-    throw err;
-  }
+    return shape(row);
+  });
 }
 
 /** New key; the old one stops working at once. */
@@ -202,12 +196,18 @@ export async function restoreSpace(access: Access, id: string): Promise<Space> {
   });
 }
 
-/** Space keys → Space ids (unknown keys are dropped). Used by auth, not scoped by Access. */
+/**
+ * Space keys → Space ids (unknown keys are dropped). Used by auth, not scoped by Access.
+ * An archived Space's key stops working until the owner restores the Space.
+ */
 export async function resolveKeys(keys: string[]): Promise<string[]> {
   const clean = [...new Set(keys.map((k) => k.trim()).filter((k) => /^sk_[a-z2-7]{32}$/.test(k)))];
   if (!clean.length) return [];
   const db = await getDb();
-  const rows = await db.select({ id: spaces.id }).from(spaces).where(inArray(spaces.key, clean));
+  const rows = await db
+    .select({ id: spaces.id })
+    .from(spaces)
+    .where(and(inArray(spaces.key, clean), isNull(spaces.archivedAt)));
   return rows.map((r) => r.id);
 }
 

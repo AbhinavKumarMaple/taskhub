@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local data (PGlite files, throwaway probes) is not source.
+    ".data/**",
   ]),
 ]);
 

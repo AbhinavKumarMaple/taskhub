@@ -5,8 +5,12 @@ import { cn } from "@/lib/cn";
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "outline";
 export type ButtonSize = "xs" | "sm" | "md";
 
-const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-accent-fg hover:bg-accent-hover border border-transparent",
+/** "primary-off": a disabled (not loading) primary button — plain grey, so it never looks half-enabled. */
+type VariantKey = ButtonVariant | "primary-off";
+
+const VARIANTS: Record<VariantKey, string> = {
+  primary: "bg-accent-solid text-accent-fg hover:bg-accent-solid-hover border border-transparent",
+  "primary-off": "bg-surface-3 text-fg-subtle border border-border",
   secondary: "bg-surface text-fg border border-border hover:bg-surface-2 hover:border-border-strong",
   outline: "bg-transparent text-fg border border-border hover:bg-surface-2",
   ghost: "bg-transparent text-fg-muted border border-transparent hover:bg-surface-2 hover:text-fg",
@@ -23,14 +27,15 @@ const ICON_SIZES: Record<ButtonSize, string> = { xs: "size-6", sm: "size-7", md:
 
 /** Class string for a button look — use on <Link> / <a> too. `iconOnly` makes it a square with no side padding. */
 export function buttonClass(
-  variant: ButtonVariant = "secondary",
+  variant: VariantKey = "secondary",
   size: ButtonSize = "md",
   className?: string,
   iconOnly = false,
 ) {
   return cn(
     "inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-medium transition-colors [&_svg]:shrink-0",
-    "disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50",
+    "disabled:pointer-events-none aria-disabled:pointer-events-none",
+    variant !== "primary-off" && "disabled:opacity-50 aria-disabled:opacity-50",
     VARIANTS[variant],
     SIZES[size],
     iconOnly ? ICON_SIZES[size] : PADDING[size],
@@ -57,7 +62,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={buttonClass(variant, size, className)}
+      className={buttonClass(variant === "primary" && disabled && !loading ? "primary-off" : variant, size, className)}
       {...rest}
     >
       {loading ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : icon}

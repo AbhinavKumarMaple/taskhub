@@ -20,6 +20,7 @@ import { cn } from "@/lib/cn";
 import { progressText } from "@/lib/format";
 import type { ChecklistItem } from "@/lib/types";
 import { Section } from "./section";
+import { useUnsaved } from "./unsaved";
 
 export type ChecklistHandlers = {
   /** 1-based index. */
@@ -48,6 +49,7 @@ export function Checklist({
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
+  useUnsaved(adding && !!draft.trim());
   const done = items.filter((i) => i.checked).length;
   const dndId = useId(); // stable id so server and client markup match
   const sensors = useSensors(
@@ -194,7 +196,7 @@ function Row({
           {...attributes}
           {...listeners}
           aria-label={`Reorder item ${index}: ${item.text}`}
-          className="mt-[1px] inline-flex size-5 shrink-0 cursor-grab items-center justify-center rounded text-fg-subtle opacity-0 group-hover:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
+          className="touch-reveal mt-[1px] inline-flex size-5 shrink-0 cursor-grab items-center justify-center rounded text-fg-subtle opacity-0 group-hover:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
         >
           <GripVertical className="size-3.5" />
         </button>
@@ -242,7 +244,7 @@ function Row({
             }
           />
           {!disabled && (
-            <span className="flex shrink-0 items-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+            <span className="touch-reveal flex shrink-0 items-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
               <IconButton
                 label={`Edit item ${index}`}
                 size="xs"

@@ -12,7 +12,8 @@ import { useToast } from "@/components/ui/toast";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { decisionHref, documentHref, href, taskHref, withParams } from "@/lib/nav";
 import { loadActivityAction } from "@/server/actions/lists-actions";
-import type { Activity, FieldChanges, SpaceRef } from "@/lib/types";
+import type { Activity, SpaceRef } from "@/lib/types";
+import { Diff } from "@/components/task/activity-timeline";
 
 const ACTION_LABEL: Record<string, string> = {
   created: "Created",
@@ -45,31 +46,6 @@ function entityLink(a: Activity, space: string | null): string | null {
     default:
       return null;
   }
-}
-
-const show = (v: unknown): string => {
-  if (v === null || v === undefined || v === "") return "none";
-  if (Array.isArray(v)) return v.length ? v.join(", ") : "none";
-  if (typeof v === "object") return JSON.stringify(v);
-  const s = String(v);
-  return s.length > 80 ? `${s.slice(0, 80)}…` : s;
-};
-
-function Changes({ changes }: { changes: FieldChanges }) {
-  const entries = Object.entries(changes ?? {});
-  if (entries.length === 0) return null;
-  return (
-    <ul className="mt-1 flex flex-col gap-0.5 text-xs text-fg-muted">
-      {entries.slice(0, 6).map(([field, c]) => (
-        <li key={field} className="truncate">
-          <span className="text-fg-subtle">{field}:</span> <span className="line-through decoration-fg-subtle/60">{show(c?.from)}</span>
-          {" → "}
-          <span className="text-fg">{show(c?.to)}</span>
-        </li>
-      ))}
-      {entries.length > 6 && <li>and {entries.length - 6} more</li>}
-    </ul>
-  );
 }
 
 /** Groups by calendar day; "Load more" fetches the next 50 older rows. */
@@ -187,7 +163,7 @@ export function ActivityTimeline({
                         </span>
                       </div>
                       <div className="pl-[52px]">
-                        <Changes changes={a.changes} />
+                        <Diff changes={a.changes} />
                       </div>
                     </li>
                   );

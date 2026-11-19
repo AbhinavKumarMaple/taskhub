@@ -57,7 +57,7 @@ export function DocumentDetail({ doc, selectedSpace }: { doc: DocumentFull; sele
       <div className="flex flex-wrap items-start gap-3 pb-1">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-fg-subtle">{doc.ref}</span>
+            <span className="font-mono text-xs text-fg-muted">{doc.ref}</span>
             <CopyButton value={doc.ref} label={`Copy ${doc.ref}`} size="xs" />
             <SpaceChip space={doc.space} />
             {archived && <ArchivedChip />}
@@ -95,6 +95,7 @@ export function DocumentDetail({ doc, selectedSpace }: { doc: DocumentFull; sele
           <CopyButton
             value={() => window.location.origin + href(`/documents/${doc.ref}`)}
             label="Copy link"
+            icon="link"
             variant="secondary"
             size="md"
           />

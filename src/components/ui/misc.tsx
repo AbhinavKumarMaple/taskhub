@@ -1,5 +1,19 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { formatDateTime, relativeTime } from "@/lib/format";
+
+/** The one way lists show "updated" times: relative ("16m ago"), with the exact date and time as a tooltip. */
+export function RelTime({ date, className }: { date: string | number | Date; className?: string }) {
+  const d = new Date(date);
+  return (
+    <time dateTime={d.toISOString()} title={formatDateTime(d)} className={className} suppressHydrationWarning>
+      {relativeTime(d)}
+    </time>
+  );
+}
+
+/** Header cell class shared by every list table, so header rows line up across pages. */
+export const TH_CLASS = "h-9 px-3 font-medium";
 
 /** Still block that breathes (animate-pulse), never a moving shimmer. */
 export function Skeleton({ className }: { className?: string }) {

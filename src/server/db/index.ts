@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
+import { ConfigError } from "../errors";
 
 export type Schema = typeof schema;
 /** Driver-neutral Drizzle database (Neon Pool or PGlite). */
@@ -49,6 +50,10 @@ export function createTestDb() {
 
 async function createDefault(): Promise<Db> {
   const url = process.env.DATABASE_URL;
+  // In production a missing DATABASE_URL would quietly write to a local disk that Vercel throws away.
+  // Set PGLITE_DIR explicitly to run a production build on local PGlite on purpose.
+  if (!url && process.env.NODE_ENV === "production" && !process.env.PGLITE_DIR)
+    throw new ConfigError("DATABASE_URL is not set. Set it to your Postgres (Neon) connection string.");
   const { db, close } = url
     ? await createNeonDb(url)
     : await createPgliteDb(process.env.PGLITE_DIR ?? path.join(process.cwd(), ".data", "pglite"));

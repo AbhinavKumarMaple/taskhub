@@ -34,14 +34,16 @@ statuses `To Do`, `In Progress`, `Done` (the last one is the terminal status); t
 
 - `settings` (single row id=1): `statuses text[]`, `defaultStatus`, `types text[]`, `priorities text[]`,
   `labels text[]`, `dodDefaults text[]` (Definition-of-Done items added to new tasks), `updatedAt`.
-- `spaces`: `id`, `name` (unique), `description`, `key` (unique), `color` (one of 8 named swatches),
+- `spaces`: `id`, `name` (unique, ignoring case, among the Spaces the caller can see: all of them for the owner,
+  the held keys for a chat, so a chat cannot probe hidden names), `description`, `key` (unique), `color` (one of 8 named swatches),
   `createdAt`, `archivedAt`.
 - `tasks`: `id serial`, `ref text unique` (`T-<n>` for top level from a global sequence; a child is
   `<parent ref>.<k>` using the parent's `childCounter`), `spaceId`, `parentId`, `isDraft bool`, `title`,
   `description`, `status`, `type`, `priority`, `labels text[]`, `assignees text[]`, `milestoneId`, `dueDate`,
   `plan`, `notes`, `finalSummary`, `references text[]`, `documentation text[]`, `modifiedFiles text[]`,
-  `ordinal double` (manual order inside a column), `childCounter int`, `createdAt`, `updatedAt`, `archivedAt`.
-  A child always lives in its parent's Space.
+  `ordinal double` (manual order inside a column, kept per Space so one Space's moves never read or renumber
+  another's), `childCounter int`, `createdAt`, `updatedAt`, `archivedAt`.
+  A child always lives in its parent's Space. Changing the parent gives the task (and its subtasks) new refs.
 - `checklist_items`: `id`, `taskId`, `list` (`ac` | `dod`), `text`, `checked`, `position`.
 - `task_dependencies`: (`taskId`, `dependsOnId`) — same Space only; reject self and cycles.
 - `comments`: `id`, `taskId`, `author`, `body`, `createdAt`.
@@ -49,6 +51,7 @@ statuses `To Do`, `In Progress`, `Done` (the last one is the terminal status); t
 - `documents`: `id`, `ref` (`DOC-<n>`), `spaceId`, `title`, `body` (markdown), `createdAt`, `updatedAt`, `archivedAt`.
 - `decisions`: `id`, `ref` (`DEC-<n>`), `spaceId`, `title`, `status` (`proposed|accepted|rejected|superseded`),
   `context`, `decision`, `consequences`, `createdAt`, `updatedAt`, `archivedAt`.
+- `login_failures`: `client` (IP), `count`, `windowStart` — the owner sign-in rate limit (10 per 15 min).
 - `activity`: `id`, `spaceId`, `entityType` (`task|milestone|document|decision|space|settings`), `entityRef`,
   `action` (`created|updated|status|archived|restored|deleted|commented|promoted|demoted|moved`), `actor`,
   `summary` (one human sentence), `changes jsonb` (field → {from,to}), `createdAt`. This replaces git history:
@@ -101,10 +104,15 @@ Required operations (names are a guide; keep them consistent):
   `/logout`. All pages except `/login` require it.
 - Agents: `Authorization: Bearer <AGENT_TOKEN>` on `/api/v1/*` and `/api/mcp`. Space keys come from the
   `X-Space-Key` header (comma-separated allowed) or a `space_key` argument. The owner cookie also works on
-  `/api/v1/*` with `spaces: 'all'`.
+  `/api/v1/*` with `spaces: 'all'`. An archived Space's key stops working until it is restored. A chat may not
+  record itself as `owner` (it becomes `chat:owner`). A task's activity is shown only from Spaces the caller holds.
+- Hardening: the post-login `next` must be a same-origin path; 10 failed sign-ins per IP lock sign-in for 15
+  minutes; the session HMAC includes a hash of `OWNER_PASSWORD` (changing it signs everyone out); `/logout` is
+  POST-only and same-origin; pages send `X-Frame-Options: DENY` / `frame-ancestors 'none'`.
 - Dev defaults when env vars are unset and `NODE_ENV !== 'production'`: `OWNER_PASSWORD=dev`,
-  `AGENT_TOKEN=dev-token`, `SESSION_SECRET=dev-secret`. In production, missing vars make the app refuse to start
-  those routes with a clear error.
+  `AGENT_TOKEN=dev-token`, `SESSION_SECRET=dev-secret`. In production, missing vars (or `OWNER_PASSWORD` under
+  12 characters, `AGENT_TOKEN`/`SESSION_SECRET` under 32) make the app refuse to start those routes with a clear
+  error, and a missing `DATABASE_URL` is an error (set `PGLITE_DIR` to use local PGlite on purpose).
 
 ## HTTP API (`src/app/api/v1/**`) — JSON, documented in `docs/API.md`
 

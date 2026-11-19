@@ -110,6 +110,11 @@ export const updateTaskInput = z.object({
   modifiedFiles: strList.optional(),
   /** Top-level tasks only; moves children with it. */
   spaceId: spaceId.optional(),
+  /**
+   * New parent (same Space), or null to make it top level. The task gets a new ref under its new
+   * parent (`T-3.4`, or `T-<n>` at top level) and its subtasks are renumbered with it.
+   */
+  parent: taskRef.nullable().optional(),
   // checklist ops (indexes are 1-based positions in the current list)
   addAc: strList.optional(),
   checkAc: indexList.optional(),

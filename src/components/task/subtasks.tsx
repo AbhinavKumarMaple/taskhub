@@ -86,15 +86,22 @@ export function Subtasks({
                 <span className={cn("min-w-0 flex-1 truncate", (c.archivedAt || c.status === doneStatus) && "text-fg-subtle", c.archivedAt && "line-through")}>
                   {c.title}
                 </span>
-                {c.labels.includes("waiting") && <LabelChip label="waiting" />}
-                <PriorityMarker priority={c.priority} />
-                {c.acTotal > 0 && (
-                  <span className="text-xs tabular-nums text-fg-subtle">
-                    {c.acDone}/{c.acTotal}
-                  </span>
-                )}
-                <TypeChip type={c.type} />
-                <StatusChip status={c.status} statuses={statuses} size="xs" />
+                {/* Fixed-width slots so every row's chips line up in columns. */}
+                <span className="flex w-14 shrink-0 justify-end">
+                  {c.labels.includes("waiting") && <LabelChip label="waiting" />}
+                </span>
+                <span className="flex w-3 shrink-0 justify-center">
+                  <PriorityMarker priority={c.priority} />
+                </span>
+                <span className="w-9 shrink-0 text-right text-xs tabular-nums text-fg-subtle">
+                  {c.acTotal > 0 ? `${c.acDone}/${c.acTotal}` : ""}
+                </span>
+                <span className="hidden w-[5.5rem] shrink-0 sm:flex">
+                  <TypeChip type={c.type} />
+                </span>
+                <span className="flex w-24 shrink-0">
+                  <StatusChip status={c.status} statuses={statuses} size="xs" />
+                </span>
               </Link>
             </li>
           ))}

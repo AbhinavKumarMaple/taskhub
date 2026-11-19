@@ -80,7 +80,10 @@ export async function getNavCounts(access: Access, input: { spaces?: string[] } 
   const scopeT = spaceScope(access, tasks.spaceId, input.spaces);
   const [t] = await db
     .select({
-      board: sql<number>`(count(*) filter (where ${tasks.archivedAt} is null and not ${tasks.isDraft} and ${tasks.status} <> ${settings.doneStatus}))::int`,
+      // Same cards as the main view (/board?type=feature), so the sidebar matches the board header.
+      board: settings.types.includes("feature")
+        ? sql<number>`(count(*) filter (where ${tasks.archivedAt} is null and not ${tasks.isDraft} and ${tasks.type} = 'feature'))::int`
+        : sql<number>`(count(*) filter (where ${tasks.archivedAt} is null and not ${tasks.isDraft}))::int`,
       tasks: sql<number>`(count(*) filter (where ${tasks.archivedAt} is null and not ${tasks.isDraft}))::int`,
       drafts: sql<number>`(count(*) filter (where ${tasks.archivedAt} is null and ${tasks.isDraft}))::int`,
       archive: sql<number>`(count(*) filter (where ${tasks.archivedAt} is not null))::int`,

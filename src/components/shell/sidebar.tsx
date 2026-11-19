@@ -177,7 +177,7 @@ export function Sidebar({ spaces, counts }: { spaces: SidebarSpace[]; counts: Re
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         <Link href={href("/board", { type: "feature" }, current?.id)} className="flex min-w-0 flex-1 items-center gap-2 rounded-md">
-          <span className="inline-flex size-6 items-center justify-center rounded-md bg-accent text-accent-fg">
+          <span className="inline-flex size-6 items-center justify-center rounded-md bg-accent-solid text-accent-fg">
             <LayoutGrid className="size-3.5" aria-hidden />
           </span>
           <span className="text-[14px] font-semibold tracking-tight">Taskhub</span>

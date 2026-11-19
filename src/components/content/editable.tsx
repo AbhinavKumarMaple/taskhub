@@ -97,7 +97,7 @@ export function EditableTitle({
         className="group -mx-1.5 inline-flex max-w-full items-center gap-2 rounded-md border border-transparent px-1.5 py-0.5 text-left hover:border-border"
       >
         <span className="min-w-0 break-words">{value}</span>
-        <Pencil className="size-3.5 shrink-0 text-fg-subtle opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden />
+        <Pencil className="touch-reveal size-3.5 shrink-0 text-fg-subtle opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden />
       </button>
     </h1>
   );

@@ -9,8 +9,8 @@ import { SpaceChip } from "@/components/ui/chip";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
-import { EmptyState, PageHeader } from "@/components/ui/misc";
-import { formatDate, relativeTime } from "@/lib/format";
+import { EmptyState, PageHeader, RelTime } from "@/components/ui/misc";
+
 import { documentHref } from "@/lib/nav";
 import type { DocumentSummary, SpaceRef } from "@/lib/types";
 import { createDocumentAction } from "@/server/actions/content-actions";
@@ -67,17 +67,17 @@ export function DocumentsView({ documents, spaces, selectedSpace, archived, filt
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-border text-left text-xs text-fg-muted">
-                <th scope="col" className="w-24 px-4 py-2 font-medium">Ref</th>
-                <th scope="col" className="px-2 py-2 font-medium">Title</th>
-                {!selectedSpace && <th scope="col" className="w-40 px-2 py-2 font-medium">Space</th>}
-                <th scope="col" className="w-32 px-4 py-2 text-right font-medium">Updated</th>
+                <th scope="col" className="h-9 w-24 px-3 font-medium">Ref</th>
+                <th scope="col" className="h-9 px-3 font-medium">Title</th>
+                {!selectedSpace && <th scope="col" className="h-9 w-40 px-3 font-medium">Space</th>}
+                <th scope="col" className="h-9 w-32 px-3 text-right font-medium">Updated</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {documents.map((d) => (
                 <tr key={d.ref} className="hover:bg-surface-2/60">
-                  <td className="px-4 py-2 font-mono text-xs text-fg-subtle">{d.ref}</td>
-                  <td className="max-w-0 px-2 py-2">
+                  <td className="px-3 py-2 font-mono text-xs text-fg-muted">{d.ref}</td>
+                  <td className="max-w-0 px-3 py-2">
                     <div className="flex items-center gap-2">
                       <Link href={documentHref(d.ref, selectedSpace)} className="truncate font-medium hover:text-accent">
                         {d.title}
@@ -86,12 +86,12 @@ export function DocumentsView({ documents, spaces, selectedSpace, archived, filt
                     </div>
                   </td>
                   {!selectedSpace && (
-                    <td className="px-2 py-2">
+                    <td className="px-3 py-2">
                       <SpaceChip space={d.space} />
                     </td>
                   )}
-                  <td className="px-4 py-2 text-right text-xs text-fg-muted" title={formatDate(d.updatedAt, { alwaysYear: true })} suppressHydrationWarning>
-                    {relativeTime(d.updatedAt)}
+                  <td className="px-3 py-2 text-right text-xs text-fg-muted tabular-nums">
+                    <RelTime date={d.updatedAt} />
                   </td>
                 </tr>
               ))}

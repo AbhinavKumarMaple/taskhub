@@ -10,8 +10,8 @@ Two ways in, both backed by the same service layer:
 | Header | Meaning |
 |---|---|
 | `Authorization: Bearer <AGENT_TOKEN>` | Required for chats, on every call. One token is shared by every chat. |
-| `X-Space-Key: sk_…` | The Spaces this call may touch. Comma-separate several keys. You can also pass them as the `space_key` query param (REST) or tool argument (MCP). |
-| `X-Actor: <name>` | The name written to the activity log. Default `chat`. On MCP, the `actor` tool argument does the same. |
+| `X-Space-Key: sk_…` | The Spaces this call may touch. Comma-separate several keys. You can also pass them as the `space_key` query param (REST) or tool argument (MCP); prefer the header, since URLs end up in logs. An archived Space's key does not work until the owner restores it. |
+| `X-Actor: <name>` | The name written to the activity log. Default `chat`. On MCP, the `actor` tool argument does the same. `owner` is reserved for the web app; a chat asking for it is recorded as `chat:owner`. |
 
 - **Owner cookie.** The owner's session cookie also works on `/api/v1/*`. It sees every Space and logs as `owner`.
 - **No key.** A token with no valid key sees no Spaces. It can still create one: `POST /spaces` or `space_create`.
@@ -86,6 +86,8 @@ Refs are global and case-insensitive: `T-12`, `T-12.3`, `M-3`, `DOC-3`, `DEC-3`.
 
 - Any of the create fields, except `parent`, which is fixed once the task exists.
 - `spaceId`, which moves a top-level task and its children.
+- `parent`: a task ref in the same Space, or `null` for top level. The task gets a new ref under its new parent
+  (`T-3.4`, or a fresh `T-<n>`), its subtasks are renumbered with it, and the response carries the new ref.
 - Checklist ops. Item numbers are **1-based**:
   - `addAc[]`, `checkAc[]`, `uncheckAc[]`, `removeAc[]`
   - `editAc[{index, text}]`
@@ -171,7 +173,7 @@ How the endpoint behaves:
 | `draft_create` | Same as `task_create`, but makes a draft |
 | `task_list` | The REST list filters, in snake_case. `space_id` filters by Space |
 | `task_view` | `ref`: the task as text, with numbered checklists |
-| `task_edit` | `ref` plus any field, and the ops `add_ac`, `check_ac`, `uncheck_ac`, `remove_ac`, `edit_ac`, `set_ac`, `reorder_ac` (and `…_dod`), `append_notes`, `append_plan`, `add_labels`, `remove_labels`, `add_deps`, `remove_deps`, `space_id` |
+| `task_edit` | `ref` plus any field, and the ops `add_ac`, `check_ac`, `uncheck_ac`, `remove_ac`, `edit_ac`, `set_ac`, `reorder_ac` (and `…_dod`), `append_notes`, `append_plan`, `add_labels`, `remove_labels`, `add_deps`, `remove_deps`, `space_id`, `parent` |
 | `task_move` | `ref, status?, before_ref?, after_ref?, ordinal?` |
 | `task_archive` / `task_restore` / `task_delete` | `ref` |
 | `draft_promote` / `task_demote` | `ref` |

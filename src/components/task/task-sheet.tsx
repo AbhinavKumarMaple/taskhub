@@ -11,6 +11,7 @@ import { EmptyState, Skeleton } from "@/components/ui/misc";
 import { Sheet } from "@/components/ui/sheet";
 import { taskHref, withParams } from "@/lib/nav";
 import { TaskDetail } from "./task-detail";
+import { confirmDiscard, UnsavedProvider, useUnsavedRegistry } from "./unsaved";
 
 export type TaskSheetProps = {
   /** The task to show. Falls back to the `?task=` param; empty = closed. */
@@ -45,12 +46,17 @@ export function TaskSheet({ taskRef, onClose }: TaskSheetProps) {
   }, [ref]);
 
   const close = onClose ?? (() => router.replace(withParams(sp, { task: null }, pathname), { scroll: false }));
+  // Esc, the backdrop and the close button ask first when a text box holds unsaved typing.
+  const unsaved = useUnsavedRegistry();
+  const guardedClose = () => {
+    if (confirmDiscard(unsaved, ref)) close();
+  };
   const current = loaded && loaded.ref === ref ? loaded : null;
 
   return (
     <Sheet
       open={!!ref}
-      onClose={close}
+      onClose={guardedClose}
       title={<span className="font-mono">{ref}</span>}
       actions={
         ref && (
@@ -63,7 +69,9 @@ export function TaskSheet({ taskRef, onClose }: TaskSheetProps) {
       {!current ? (
         <SheetSkeleton />
       ) : current.data ? (
-        <TaskDetail key={`${current.ref}-${current.stamp}`} data={current.data} mode="sheet" onDeleted={close} />
+        <UnsavedProvider registry={unsaved}>
+          <TaskDetail key={`${current.ref}-${current.stamp}`} data={current.data} mode="sheet" onDeleted={close} />
+        </UnsavedProvider>
       ) : (
         <EmptyState
           icon={<SearchX className="size-5" />}

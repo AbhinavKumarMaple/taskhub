@@ -18,7 +18,7 @@ export default function LoginPage(props: PageProps<"/login">) {
     <main className="flex min-h-dvh items-center justify-center bg-bg px-4">
       <div className="w-full max-w-[340px] rounded-xl border border-border bg-surface p-6">
         <div className="mb-5 flex items-center gap-2">
-          <span className="inline-flex size-7 items-center justify-center rounded-md bg-accent text-accent-fg">
+          <span className="inline-flex size-7 items-center justify-center rounded-md bg-accent-solid text-accent-fg">
             <LayoutGrid className="size-4" aria-hidden />
           </span>
           <div>

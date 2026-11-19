@@ -6,9 +6,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { buttonClass } from "@/components/ui/button";
 import { LabelChip, PriorityMarker, SpaceChip, StatusChip, TypeChip } from "@/components/ui/chip";
-import { ProgressRing } from "@/components/ui/misc";
+import { ProgressRing, RelTime } from "@/components/ui/misc";
 import { cn } from "@/lib/cn";
-import { formatDate } from "@/lib/format";
+
 import { withParams } from "@/lib/nav";
 import type { TaskSummary } from "@/lib/types";
 import { PAGE_SIZE } from "./constants";
@@ -19,7 +19,7 @@ const COLUMNS: Col[] = [
   { key: "ref", label: "Ref", sort: "ref", className: "w-20" },
   { key: "title", label: "Title", sort: "title" },
   { key: "status", label: "Status", sort: "status", className: "w-28" },
-  { key: "type", label: "Type", sort: "type", className: "w-24" },
+  { key: "type", label: "Type", sort: "type", className: "w-28" },
   { key: "priority", label: "Priority", sort: "priority", className: "w-16" },
   { key: "space", label: "Space", sort: "space", className: "w-28" },
   { key: "labels", label: "Labels", className: "w-24" },
@@ -165,7 +165,9 @@ export function TasksTable({
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-xs text-fg-muted tabular-nums">{formatDate(t.updatedAt)}</td>
+                <td className="px-3 py-2 text-xs text-fg-muted tabular-nums">
+                  <RelTime date={t.updatedAt} />
+                </td>
               </TaskRow>
             ))}
           </tbody>

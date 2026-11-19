@@ -7,12 +7,15 @@ import { exportBoardAction } from "@/app/(app)/board/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { NewTaskButton } from "@/components/lists/new-draft-button";
 import { withParams } from "@/lib/nav";
 import { pluralize } from "@/lib/format";
 import type { SpaceRef } from "@/lib/types";
 import type { ListTasksInput } from "@/server/validation";
 
 const FILTER_KEYS = ["type", "label", "priority", "assignee", "milestone", "q"] as const;
+/** The main view: features only. "Clear filters" returns here, and it does not count as a filter. */
+const DEFAULT_TYPE = "feature";
 
 export type BoardFilterBarProps = {
   spaces: SpaceRef[];
@@ -71,7 +74,7 @@ export function BoardFilterBar({
   }, [q]);
 
   const grouped = sp.get("group") === "milestone";
-  const active = FILTER_KEYS.filter((k) => !!sp.get(k));
+  const active = FILTER_KEYS.filter((k) => (k === "type" ? (sp.get("type") ?? "") !== DEFAULT_TYPE : !!sp.get(k)));
   const hasFilters = active.length > 0;
 
   const onExport = async () => {
@@ -106,7 +109,7 @@ export function BoardFilterBar({
         <span className="text-xs text-fg-subtle tabular-nums" aria-live="polite">
           {pluralize(total, "card")}
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <Button
             size="sm"
             variant={grouped ? "primary" : "secondary"}
@@ -125,6 +128,7 @@ export function BoardFilterBar({
           >
             Export markdown
           </Button>
+          <NewTaskButton />
         </div>
       </div>
 
@@ -214,7 +218,7 @@ export function BoardFilterBar({
             onClick={() => {
               lastPushed.current = "";
               setQ("");
-              set(Object.fromEntries(FILTER_KEYS.map((k) => [k, null])));
+              set({ ...Object.fromEntries(FILTER_KEYS.map((k) => [k, null])), type: DEFAULT_TYPE });
             }}
           >
             Clear filters

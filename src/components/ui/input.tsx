@@ -111,7 +111,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           id={cid}
           type="checkbox"
           aria-checked={indeterminate ? "mixed" : undefined}
-          className="peer size-4 cursor-pointer appearance-none rounded-[4px] border border-border-strong bg-surface transition-colors checked:border-accent checked:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed"
+          className="peer size-4 cursor-pointer appearance-none rounded-[4px] border border-border-strong bg-surface transition-colors checked:border-accent-solid checked:bg-accent-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed"
           {...rest}
         />
         {indeterminate ? (

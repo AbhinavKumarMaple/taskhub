@@ -12,3 +12,4 @@ export * from "./statistics";
 export * from "./activity";
 export { getSettings, updateSettings, DEFAULT_SETTINGS } from "./settings";
 export type { Access } from "@/lib/types";
+export { loginRetryAfter, recordLoginFailure, clearLoginFailures } from "./login-limit";

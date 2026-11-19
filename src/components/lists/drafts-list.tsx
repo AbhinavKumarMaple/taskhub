@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { LabelChip, SpaceChip, TypeChip } from "@/components/ui/chip";
 import { useToast } from "@/components/ui/toast";
-import { formatDate } from "@/lib/format";
+import { RelTime } from "@/components/ui/misc";
 import { promoteDraftAction } from "@/server/actions/lists-actions";
 import type { TaskSummary } from "@/lib/types";
 import { RefLink, TaskRow, useTaskSheetHref } from "./tasks-table";
@@ -60,7 +60,9 @@ export function DraftsList({ items }: { items: TaskSummary[] }) {
                   ))}
                 </div>
               </td>
-              <td className="px-3 py-2 text-xs text-fg-muted tabular-nums">{formatDate(t.updatedAt)}</td>
+              <td className="px-3 py-2 text-xs text-fg-muted tabular-nums">
+                  <RelTime date={t.updatedAt} />
+                </td>
               <td className="px-3 py-2">
                 <div className="flex justify-end gap-1.5">
                   <Link href={sheetHref(t.ref)} scroll={false} className={buttonClass("ghost", "xs")}>

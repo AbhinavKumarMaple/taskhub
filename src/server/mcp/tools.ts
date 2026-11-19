@@ -64,6 +64,11 @@ const editFields = {
   ref,
   ...taskFields,
   space_id: z.string().optional().describe("Move a top-level task (and its children) to another Space you hold"),
+  parent: z
+    .string()
+    .nullable()
+    .optional()
+    .describe("New parent ref in the same Space, or null for top level. The task (and its subtasks) get new refs"),
   add_ac: strs.optional(),
   check_ac: idxs.optional(),
   uncheck_ac: idxs.optional(),

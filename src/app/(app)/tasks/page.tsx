@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { ListChecks } from "lucide-react";
+import { redirect } from "next/navigation";
+import { NewTaskButton } from "@/components/lists/new-draft-button";
 import { TaskFilters } from "@/components/lists/task-filters";
 import { TaskSheetSlot } from "@/components/lists/task-sheet-slot";
 import { PAGE_SIZE } from "@/components/lists/constants";
 import { TasksTable } from "@/components/lists/tasks-table";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
-import { param, paramList, spacesFilter } from "@/lib/nav";
+import { param, paramList, spacesFilter, withParams } from "@/lib/nav";
 import { requireOwner } from "@/server/auth";
-import { Invalid } from "@/server/errors";
+import { isAppError } from "@/server/errors";
 import * as svc from "@/server/service";
 import { TASK_SORTS } from "@/server/validation";
 
@@ -51,16 +53,29 @@ export default async function AllTasksPage({ searchParams }: PageProps<"/tasks">
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
       })
+      .then((l) => ({ ...l, error: null as string | null }))
       .catch((e: unknown) => {
-        // A malformed filter in the URL shows an empty table, not an error page.
-        if (e instanceof Invalid) return { items: [], total: 0 };
+        // A malformed filter in the URL shows an empty table with the reason, not an error page.
+        if (isAppError(e)) return { items: [], total: 0, error: e.message };
         throw e;
       }),
   ]);
 
+  // A page number past the end (e.g. after filtering) goes to the last page instead of an empty table.
+  const pages = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
+  if (page > pages) {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(sp)) if (typeof v === "string") q.set(k, v);
+    redirect(withParams(q, { page: pages > 1 ? pages : null }, "/tasks"));
+  }
+
   return (
     <div className="flex flex-col">
-      <PageHeader title="All tasks" description="Every task that is not a draft or archived." />
+      <PageHeader
+        title="All tasks"
+        description="Every task that is not a draft or archived."
+        actions={<NewTaskButton size="md" />}
+      />
       <TaskFilters
         statuses={settings.statuses}
         types={settings.types}
@@ -68,14 +83,16 @@ export default async function AllTasksPage({ searchParams }: PageProps<"/tasks">
         labels={settings.labels}
         milestones={milestones.map((m) => ({ ref: m.ref, title: m.title }))}
       />
-      {list.total === 0 ? (
+      {list.error ? (
+        <EmptyState icon={<ListChecks />} title="These filters could not be applied" description={list.error} />
+      ) : list.total === 0 ? (
         <EmptyState
           icon={<ListChecks />}
           title={hasFilters ? "No tasks match these filters" : "No tasks yet"}
           description={
             hasFilters
               ? "Clear a filter or change the search to see more."
-              : "Create a task from the Board, or ask a connected chat to add one."
+              : "Use New task above, or ask a connected chat to add one."
           }
         />
       ) : (

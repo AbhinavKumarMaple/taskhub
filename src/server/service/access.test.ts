@@ -141,6 +141,7 @@ describe("access isolation", () => {
     const sp = await svc.createSpace(chat, { name: "Chat made" });
     expect(sp.key).toMatch(/^sk_[a-z2-7]{32}$/);
     expect(sp.id).toMatch(/^sp_[a-z2-7]{10}$/);
-    await expect(svc.createSpace(chat, { name: "chat MADE" })).rejects.toMatchObject({ code: "conflict" });
+    const holder: Access = { actor: "chat", spaces: [sp.id] };
+    await expect(svc.createSpace(holder, { name: "chat MADE" })).rejects.toMatchObject({ code: "conflict" });
   });
 });

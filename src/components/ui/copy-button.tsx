@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Link2, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { buttonClass, type ButtonSize, type ButtonVariant } from "./button";
@@ -14,6 +14,7 @@ export function CopyButton({
   size = "sm",
   className,
   onCopied,
+  icon = "copy",
 }: {
   value: string | (() => string);
   /** Accessible name + tooltip. */
@@ -24,6 +25,8 @@ export function CopyButton({
   size?: ButtonSize;
   className?: string;
   onCopied?: () => void;
+  /** "link" for copying a URL, so it is not confused with copying a ref. */
+  icon?: "copy" | "link";
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -42,7 +45,7 @@ export function CopyButton({
     onCopied?.();
     setTimeout(() => setCopied(false), 1500);
   };
-  const Icon = copied ? Check : Copy;
+  const Icon: LucideIcon = copied ? Check : icon === "link" ? Link2 : Copy;
   return (
     <button
       type="button"

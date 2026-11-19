@@ -16,18 +16,28 @@ type Var = keyof typeof DEV_DEFAULTS;
 
 export const isProduction = () => process.env.NODE_ENV === "production";
 
-/** Env var, with the dev default outside production. Throws ConfigError when missing in production. */
+/** Minimum lengths enforced in production, so a weak secret cannot be deployed by accident. */
+export const MIN_LENGTH: Record<Var, number> = { OWNER_PASSWORD: 12, AGENT_TOKEN: 32, SESSION_SECRET: 32 };
+
+/**
+ * Env var, with the dev default outside production. Throws ConfigError when missing (or shorter than
+ * MIN_LENGTH) in production.
+ */
 export function authEnv(name: Var): string {
   const v = process.env[name];
-  if (v) return v;
-  if (!isProduction()) return DEV_DEFAULTS[name];
-  throw new ConfigError(`${name} is not set. Set ${Object.keys(DEV_DEFAULTS).join(", ")} in the environment.`);
+  if (!isProduction()) return v || DEV_DEFAULTS[name];
+  if (!v) throw new ConfigError(`${name} is not set. Set ${Object.keys(DEV_DEFAULTS).join(", ")} in the environment.`);
+  if (v.length < MIN_LENGTH[name])
+    throw new ConfigError(`${name} is too short: use at least ${MIN_LENGTH[name]} characters.`);
+  return v;
 }
 
-/** Names of required auth env vars that are missing (always [] outside production). */
+/** Required auth env vars that are missing or too short (always [] outside production). */
 export function missingAuthEnv(): string[] {
   if (!isProduction()) return [];
-  return (Object.keys(DEV_DEFAULTS) as Var[]).filter((k) => !process.env[k]);
+  return (Object.keys(DEV_DEFAULTS) as Var[])
+    .filter((k) => (process.env[k]?.length ?? 0) < MIN_LENGTH[k])
+    .map((k) => (process.env[k] ? `${k} (at least ${MIN_LENGTH[k]} characters)` : k));
 }
 
 /** Constant-time string comparison (hashes first so lengths never leak). */
@@ -37,8 +47,13 @@ export function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb);
 }
 
+/**
+ * The HMAC covers the expiry and a hash of OWNER_PASSWORD, so changing the password signs every
+ * existing session out (as does rotating SESSION_SECRET).
+ */
 function sign(payload: string): string {
-  return createHmac("sha256", authEnv("SESSION_SECRET")).update(payload).digest("base64url");
+  const pw = createHash("sha256").update(authEnv("OWNER_PASSWORD")).digest("base64url");
+  return createHmac("sha256", authEnv("SESSION_SECRET")).update(`${payload}.${pw}`).digest("base64url");
 }
 
 /** Cookie value: `<expiry ms>.<hmac>`. */
@@ -90,8 +105,27 @@ export function splitKeys(...values: (string | string[] | null | undefined)[]): 
     .filter(Boolean);
 }
 
-/** Only same-site relative paths survive as a post-login destination. */
+const DEFAULT_NEXT = "/board?type=feature";
+
+/**
+ * Only same-origin relative paths survive as a post-login destination. Control characters, spaces and
+ * backslashes are refused outright (browsers strip tabs/newlines, so "/\t/evil.example" would become
+ * "//evil.example"); the rest is parsed and must stay on the same origin.
+ */
 export function safeNext(next: string | null | undefined): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return "/board?type=feature";
-  return next;
+  if (!next || !next.startsWith("/") || /[\x00-\x20\x7f\\]/.test(next)) return DEFAULT_NEXT;
+  try {
+    const u = new URL(next, "http://taskhub.invalid");
+    if (u.origin !== "http://taskhub.invalid") return DEFAULT_NEXT;
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return DEFAULT_NEXT;
+  }
+}
+
+/** Reserved actor names a chat may not record itself as. */
+export function chatActor(name: string | null | undefined): string {
+  const a = (name ?? "").trim().slice(0, 100);
+  if (!a) return "chat";
+  return /^owner$/i.test(a) ? `chat:${a}` : a;
 }

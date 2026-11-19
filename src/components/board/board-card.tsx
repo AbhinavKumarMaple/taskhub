@@ -22,11 +22,12 @@ export function CardBody({ task: t, showSpace, showMilestone }: CardBodyProps) {
   const showChildren = t.childTotal > 0;
   return (
     <>
-      <div className="flex items-center gap-1.5 text-[11px] text-fg-subtle">
-        <span className="font-mono font-medium text-fg-muted">{t.ref}</span>
+      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-fg-subtle">
+        <span className="shrink-0 font-mono font-medium text-fg-muted">{t.ref}</span>
         <TypeChip type={t.type} />
-        {showSpace && <SpaceChip space={t.space} />}
-        <span className="ml-auto flex items-center">
+        {/* A long Space name truncates instead of widening the column. */}
+        {showSpace && <SpaceChip space={t.space} className="min-w-0 shrink!" />}
+        <span className="ml-auto flex shrink-0 items-center">
           <PriorityMarker priority={t.priority} />
         </span>
       </div>
@@ -82,7 +83,7 @@ export function CardBody({ task: t, showSpace, showMilestone }: CardBodyProps) {
             {due.label}
           </span>
         )}
-        <span className="ml-auto flex items-center gap-1.5">
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {t.assignees.length > 0 && <Assignees names={t.assignees} />}
           <time dateTime={new Date(t.updatedAt).toISOString()} title={`Updated ${new Date(t.updatedAt).toLocaleString()}`} suppressHydrationWarning>
             {relativeTime(t.updatedAt)}

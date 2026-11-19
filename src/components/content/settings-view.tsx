@@ -227,7 +227,9 @@ function ListSection({
           </ol>
         )}
 
-        <div className="mt-2 flex items-center gap-1.5 pl-6.5">
+        {/* Same columns as the rows above: number gutter, input, badge column (holds Add), row buttons. */}
+        <div className="mt-2 flex items-center gap-1.5">
+          <span className="w-5 shrink-0" aria-hidden />
           <Input
             inputSize="sm"
             value={adding}
@@ -243,9 +245,12 @@ function ListSection({
             }}
             className="min-w-0 flex-1"
           />
-          <Button size="sm" icon={<Plus className="size-3.5" />} onClick={add} disabled={!adding.trim()}>
-            Add
-          </Button>
+          <div className="flex w-44 shrink-0 items-center">
+            <Button size="sm" icon={<Plus className="size-3.5" />} onClick={add} disabled={!adding.trim()}>
+              Add
+            </Button>
+          </div>
+          <span className="w-[84px] shrink-0" aria-hidden />
         </div>
 
         {isStatuses && rows.length > 0 && (

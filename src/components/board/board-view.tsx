@@ -321,8 +321,9 @@ export function BoardView(props: BoardViewProps) {
         onDragCancel={endDrag}
       >
         <div className="overflow-x-auto pb-2">
+          {/* Columns share the width; the board scrolls sideways only when n × 264 px does not fit. */}
           <div
-            className="grid min-w-max gap-x-3 gap-y-2"
+            className="grid w-full gap-x-3 gap-y-2"
             style={{ gridTemplateColumns: `repeat(${n}, minmax(264px, 1fr))` }}
           >
             {statuses.map((status) => (
@@ -385,7 +386,7 @@ export function BoardView(props: BoardViewProps) {
                         <button
                           type="button"
                           onClick={() => setAdding(cid)}
-                          className="flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-fg-subtle opacity-0 outline-none transition-opacity hover:bg-surface-3 hover:text-fg focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent group-hover/col:opacity-100"
+                          className="touch-reveal flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-fg-subtle opacity-0 outline-none transition-opacity hover:bg-surface-3 hover:text-fg focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent group-hover/col:opacity-100"
                         >
                           <Plus className="size-3.5" aria-hidden /> Add to {lane.title || status}
                         </button>
@@ -506,7 +507,7 @@ function Column({
       ref={setNodeRef}
       aria-label={label}
       className={cn(
-        "group/col flex min-h-24 flex-col gap-2 rounded-lg bg-surface-2/60 p-2 transition-colors",
+        "group/col flex min-h-24 min-w-0 flex-col gap-2 rounded-lg bg-surface-2/60 p-2 transition-colors",
         isOver && "bg-accent-soft/60",
       )}
     >
@@ -647,7 +648,8 @@ function CleanupDialog({
   const [days, setDays] = useState("14");
   const [pending, setPending] = useState(false);
   const n = Number(days);
-  const valid = Number.isInteger(n) && n >= 0 && n <= 3650;
+  // An empty box is not 0 days (that would archive every Done task).
+  const valid = days.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= 3650;
 
   const confirm = async () => {
     if (!valid) return;

@@ -2,6 +2,7 @@
 
 import {
   Archive,
+  ArrowLeft,
   ArrowDownToLine,
   ArrowUpFromLine,
   Copy,
@@ -41,7 +42,7 @@ import type { UpdateTaskInput } from "@/server/validation";
 import { ActivityTimeline } from "./activity-timeline";
 import { Checklist } from "./checklist";
 import { Comments } from "./comments";
-import { Dependencies } from "./dependencies";
+import { Dependencies, RefPicker } from "./dependencies";
 import { InlineTitle, MarkdownField, StringList, TagInput } from "./fields";
 import { applyOptimistic } from "./optimistic";
 import { PropRow, Section } from "./section";
@@ -75,6 +76,7 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
   const seq = useRef(0);
   const [confirm, setConfirm] = useState<null | "delete" | { spaceId: string }>(null);
   const [busy, setBusy] = useState(false);
+  const [pickingParent, setPickingParent] = useState(false);
 
   const linkFor = (r: string) => (mode === "sheet" ? withParams(sp, { task: r }, pathname) : taskHref(r, space));
   const fullHref = taskHref(ref, space);
@@ -118,6 +120,20 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
     } catch {
       toastError("Couldn't copy", text);
     }
+  };
+
+  /** New parent (or top level). The task gets a new ref, so follow it in the URL. */
+  const changeParent = async (parent: string | null): Promise<string | null> => {
+    const r = await updateTaskAction({ ref, parent });
+    if (!r.ok) return r.error;
+    setPickingParent(false);
+    success(
+      parent ? `Moved under ${parent}` : "Now a top-level task",
+      r.data.ref !== ref ? `${ref} is now ${r.data.ref}` : undefined,
+    );
+    if (r.data.ref !== ref) router.replace(linkFor(r.data.ref), { scroll: false });
+    else setTask(r.data);
+    return null;
   };
 
   const doDelete = async () => {
@@ -249,13 +265,40 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
         )}
       </PropRow>
       <PropRow label="Parent">
-        {task.parent ? (
-          <Link href={linkFor(task.parent.ref)} scroll={false} className="flex min-w-0 items-center gap-1.5 text-[13px] hover:underline">
-            <span className="shrink-0 font-mono text-xs text-fg-muted">{task.parent.ref}</span>
-            <span className="truncate">{task.parent.title}</span>
-          </Link>
+        {pickingParent ? (
+          <div className="flex flex-col gap-1.5">
+            <RefPicker label="New parent" spaceId={task.space.id} exceptRef={ref} onPick={changeParent} />
+            <div className="flex gap-1.5">
+              {task.parent && (
+                <Button size="xs" variant="secondary" onClick={() => void changeParent(null)}>
+                  Make top level
+                </Button>
+              )}
+              <Button size="xs" variant="ghost" onClick={() => setPickingParent(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
         ) : (
-          <span className="text-[13px] text-fg-subtle">None (top level)</span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            {task.parent ? (
+              <Link href={linkFor(task.parent.ref)} scroll={false} className="flex min-w-0 items-center gap-1.5 text-[13px] hover:underline">
+                <span className="shrink-0 font-mono text-xs text-fg-muted">{task.parent.ref}</span>
+                <span className="truncate">{task.parent.title}</span>
+              </Link>
+            ) : (
+              <span className="text-[13px] text-fg-subtle">None (top level)</span>
+            )}
+            <Button
+              size="xs"
+              variant="ghost"
+              className="ml-auto"
+              onClick={() => setPickingParent(true)}
+              title="Move under another task (its ref changes)"
+            >
+              Change
+            </Button>
+          </div>
         )}
       </PropRow>
       <PropRow label="Milestone" htmlFor={`${ref}-milestone`}>
@@ -496,11 +539,20 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
 
   return (
     <div className="flex max-w-6xl flex-col gap-4">
+      <Link href={href("/tasks", {}, space)} className="inline-flex w-fit items-center gap-1 text-xs text-fg-muted hover:text-fg">
+        <ArrowLeft className="size-3.5" aria-hidden /> All tasks
+      </Link>
       {topBar}
       {banners}
+      {title}
+      {/* The aside comes first in the markup so narrow screens show Properties right under the title. */}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <aside className="flex min-w-0 flex-col gap-6 lg:order-last lg:border-l lg:border-border lg:pl-6">
+          <Section title="Properties">{properties}</Section>
+          {lists}
+          {dates}
+        </aside>
         <div className="flex min-w-0 flex-col gap-6">
-          {title}
           {description}
           {checklists}
           {subtasks}
@@ -509,11 +561,6 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
           {comments}
           {activity}
         </div>
-        <aside className="flex min-w-0 flex-col gap-6 lg:border-l lg:border-border lg:pl-6">
-          <Section title="Properties">{properties}</Section>
-          {lists}
-          {dates}
-        </aside>
       </div>
       {dialogs}
     </div>

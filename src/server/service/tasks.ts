@@ -363,7 +363,19 @@ async function loadFull(q: DbOrTx, access: Access, ref: string): Promise<TaskFul
     t.parentId ? q.select().from(tasks).where(eq(tasks.id, t.parentId)) : Promise.resolve([] as TaskRow[]),
     spaceEdges(q, t.spaceId),
     q.select().from(comments).where(eq(comments.taskId, t.id)).orderBy(asc(comments.createdAt), asc(comments.id)),
-    q.select().from(activity).where(eq(activity.entityRef, t.ref)).orderBy(desc(activity.id)).limit(100),
+    // Only history recorded in Spaces the caller holds: after a Space move, rows from the old Space
+    // (old field values, old Space id) stay hidden from a chat that holds only the new one.
+    q
+      .select()
+      .from(activity)
+      .where(
+        and(
+          eq(activity.entityRef, t.ref),
+          access.spaces === "all" ? undefined : inArray(activity.spaceId, access.spaces),
+        ),
+      )
+      .orderBy(desc(activity.id))
+      .limit(100),
   ]);
   const involved = new Set<number>();
   for (const e of edges) {
@@ -428,11 +440,15 @@ async function resolveMilestone(q: DbOrTx, access: Access, ref: string | null | 
   return m;
 }
 
-async function endOfColumn(q: DbOrTx, status: string): Promise<number> {
+/**
+ * Board order is kept per Space: the ordinal helpers below only ever read or write cards of one Space,
+ * so a chat can neither learn other Spaces' card positions nor renumber their cards.
+ */
+async function endOfColumn(q: DbOrTx, spaceId: string, status: string): Promise<number> {
   const [r] = await q
     .select({ m: max(tasks.ordinal) })
     .from(tasks)
-    .where(and(eq(tasks.status, status), isNull(tasks.archivedAt)));
+    .where(and(eq(tasks.spaceId, spaceId), eq(tasks.status, status), isNull(tasks.archivedAt)));
   return (r?.m ?? 0) + STEP;
 }
 
@@ -571,7 +587,7 @@ export async function createTask(access: Access, input: CreateTaskInput): Promis
         references: p.references ?? [],
         documentation: p.documentation ?? [],
         modifiedFiles: p.modifiedFiles ?? [],
-        ordinal: await endOfColumn(tx, status),
+        ordinal: await endOfColumn(tx, spaceId, status),
       })
       .returning();
 
@@ -623,7 +639,12 @@ const SCALARS = [
 export async function updateTask(access: Access, ref: string, input: UpdateTaskInput): Promise<TaskFull> {
   const p = parse(updateTaskInput, input);
   const finalRef = await withTx(async (tx) => {
-    const cur = await loadTask(tx, access, ref);
+    let cur = await loadTask(tx, access, ref);
+    if (p.parent !== undefined) {
+      if (p.spaceId && p.spaceId !== cur.spaceId)
+        throw new Invalid("Change the Space and the parent in separate edits");
+      cur = await reparent(tx, access, cur, p.parent);
+    }
     const settings = await loadSettings(tx);
     checkVocab(settings, { status: p.status, type: p.type, priority: p.priority });
 
@@ -740,7 +761,8 @@ export async function updateTask(access: Access, ref: string, input: UpdateTaskI
     if (!Object.keys(changes).length) return cur.ref;
 
     const statusChanged = !!changes.status;
-    if (statusChanged) set.ordinal = await endOfColumn(tx, p.status!);
+    if (statusChanged || targetSpace !== cur.spaceId)
+      set.ordinal = await endOfColumn(tx, targetSpace, p.status ?? cur.status);
     await tx
       .update(tasks)
       .set({ ...set, updatedAt: new Date() })
@@ -761,25 +783,97 @@ export async function updateTask(access: Access, ref: string, input: UpdateTaskI
   return getTask(access, finalRef);
 }
 
+/**
+ * Give a task a new parent (same Space) or make it top level. Refs encode the parent, so the task gets a
+ * fresh ref (`<parent>.<k>` or `T-<n>`) and every descendant is renumbered with it; their activity rows
+ * follow so history stays attached. Returns the updated row.
+ */
+async function reparent(tx: DbOrTx, access: Access, cur: TaskRow, parentRef: string | null): Promise<TaskRow> {
+  const parent = parentRef === null ? null : await loadTask(tx, access, parentRef);
+  if ((parent?.id ?? null) === cur.parentId) return cur;
+  if (parent) {
+    if (parent.id === cur.id || parent.ref.startsWith(`${cur.ref}.`))
+      throw new Invalid(`${parent.ref} is ${cur.ref} or one of its subtasks; a task cannot be its own parent`);
+    if (parent.spaceId !== cur.spaceId)
+      throw new Invalid(`${parent.ref} is in another Space; move the task to that Space first`);
+  }
+  const [oldParent] = cur.parentId
+    ? await tx.select({ ref: tasks.ref }).from(tasks).where(eq(tasks.id, cur.parentId))
+    : [];
+
+  let newRef: string;
+  if (parent) {
+    const [u] = await tx
+      .update(tasks)
+      .set({ childCounter: sql`${tasks.childCounter} + 1` })
+      .where(eq(tasks.id, parent.id))
+      .returning({ n: tasks.childCounter });
+    newRef = `${parent.ref}.${u.n}`;
+  } else {
+    const res = await tx.execute(sql`select nextval('task_ref_seq') as n`);
+    newRef = `T-${Number(rowsOf<{ n: string | number }>(res)[0].n)}`;
+  }
+
+  const oldRef = cur.ref;
+  const prefix = `${oldRef}.`;
+  const family = await tx
+    .select({ id: tasks.id, ref: tasks.ref })
+    .from(tasks)
+    .where(sql`${tasks.id} = ${cur.id} or ${tasks.ref} like ${prefix + "%"}`);
+  for (const f of family) {
+    const next = f.id === cur.id ? newRef : newRef + f.ref.slice(oldRef.length);
+    await tx.update(tasks).set({ ref: next }).where(eq(tasks.id, f.id));
+  }
+  await tx.update(tasks).set({ parentId: parent?.id ?? null, updatedAt: new Date() }).where(eq(tasks.id, cur.id));
+  await tx
+    .update(activity)
+    .set({ entityRef: sql`${newRef}::text || substr(${activity.entityRef}, ${oldRef.length + 1}::int)` })
+    .where(
+      and(
+        eq(activity.entityType, "task"),
+        sql`(${activity.entityRef} = ${oldRef} or ${activity.entityRef} like ${prefix + "%"})`,
+      ),
+    );
+  await logActivity(tx, access, {
+    spaceId: cur.spaceId,
+    entityType: "task",
+    entityRef: newRef,
+    action: "moved",
+    summary: parent
+      ? `Moved ${oldRef} under ${parent.ref}; it is now ${newRef}`
+      : `Made ${oldRef} a top-level task; it is now ${newRef}`,
+    changes: { parent: { from: oldParent?.ref ?? null, to: parent?.ref ?? null }, ref: { from: oldRef, to: newRef } },
+  });
+  return loadTask(tx, access, newRef);
+}
+
 // ── Board moves ──────────────────────────────────────────────────────────────
 
-async function renumberColumn(q: DbOrTx, status: string) {
+async function renumberColumn(q: DbOrTx, spaceId: string, status: string) {
   const rows = await q
     .select({ id: tasks.id })
     .from(tasks)
-    .where(and(eq(tasks.status, status), isNull(tasks.archivedAt)))
+    .where(and(eq(tasks.spaceId, spaceId), eq(tasks.status, status), isNull(tasks.archivedAt)))
     .orderBy(asc(tasks.ordinal), asc(tasks.id));
   for (let i = 0; i < rows.length; i++) {
     await q.update(tasks).set({ ordinal: (i + 1) * STEP }).where(eq(tasks.id, rows[i].id));
   }
 }
 
-async function neighbour(q: DbOrTx, status: string, ordinal: number, dir: "prev" | "next", exceptId: number) {
+async function neighbour(
+  q: DbOrTx,
+  spaceId: string,
+  status: string,
+  ordinal: number,
+  dir: "prev" | "next",
+  exceptId: number,
+) {
   const [r] = await q
     .select({ v: dir === "prev" ? max(tasks.ordinal) : min(tasks.ordinal) })
     .from(tasks)
     .where(
       and(
+        eq(tasks.spaceId, spaceId),
         eq(tasks.status, status),
         isNull(tasks.archivedAt),
         sql`${tasks.id} <> ${exceptId}`,
@@ -802,24 +896,24 @@ export async function moveTask(access: Access, input: MoveTaskInput): Promise<Ta
       if (p.ordinal !== undefined) return p.ordinal;
       if (p.beforeRef) {
         const b = await loadTask(tx, access, p.beforeRef);
-        const prev = await neighbour(tx, status, b.ordinal, "prev", cur.id);
+        const prev = await neighbour(tx, cur.spaceId, status, b.ordinal, "prev", cur.id);
         if (prev === null) return b.ordinal - STEP;
         if (b.ordinal - prev < 1e-6) return null;
         return (prev + b.ordinal) / 2;
       }
       if (p.afterRef) {
         const a = await loadTask(tx, access, p.afterRef);
-        const nxt = await neighbour(tx, status, a.ordinal, "next", cur.id);
+        const nxt = await neighbour(tx, cur.spaceId, status, a.ordinal, "next", cur.id);
         if (nxt === null) return a.ordinal + STEP;
         if (nxt - a.ordinal < 1e-6) return null;
         return (a.ordinal + nxt) / 2;
       }
-      return status === cur.status ? cur.ordinal : endOfColumn(tx, status);
+      return status === cur.status ? cur.ordinal : endOfColumn(tx, cur.spaceId, status);
     };
     let ordinal = await compute();
     if (ordinal === null) {
-      await renumberColumn(tx, status);
-      ordinal = (await compute()) ?? (await endOfColumn(tx, status));
+      await renumberColumn(tx, cur.spaceId, status);
+      ordinal = (await compute()) ?? (await endOfColumn(tx, cur.spaceId, status));
     }
 
     if (status === cur.status && ordinal === cur.ordinal) return cur.id;

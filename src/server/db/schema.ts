@@ -46,7 +46,9 @@ export const SPACE_COLORS = ["gray", "blue", "green", "amber", "red", "purple", 
 
 export const spaces = pgTable("spaces", {
   id: text("id").primaryKey(),
-  name: text("name").notNull().unique(),
+  // Unique only among the Spaces a caller can see (checked in the service), so a chat cannot probe
+  // for the names of Spaces it does not hold.
+  name: text("name").notNull(),
   description: text("description").notNull().default(""),
   key: text("key").notNull().unique(),
   color: text("color").notNull().default("blue"),
@@ -226,6 +228,13 @@ export const activity = pgTable(
     index("activity_entity_idx").on(t.entityRef),
   ],
 );
+
+/** Failed owner sign-ins per client (IP), for the login rate limit. Shared by every server instance. */
+export const loginFailures = pgTable("login_failures", {
+  client: text("client").primaryKey(),
+  count: integer("count").notNull().default(0),
+  windowStart: ts("window_start").notNull().defaultNow(),
+});
 
 export type SpaceRow = typeof spaces.$inferSelect;
 export type TaskRow = typeof tasks.$inferSelect;

@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import type { Access } from "@/lib/types";
 import { Unauthorized } from "./errors";
 import { resolveKeys } from "./service/spaces";
-import { authEnv, checkAgentToken, SESSION_COOKIE, splitKeys, verifySessionToken } from "./session";
+import { authEnv, chatActor, checkAgentToken, SESSION_COOKIE, splitKeys, verifySessionToken } from "./session";
 
 export * from "./session";
 
@@ -43,9 +43,12 @@ export function actorFromHeaders(headers: Headers, fallback = "chat"): string {
   return a ? a.slice(0, 100) : fallback;
 }
 
-/** Access for a chat holding these Space keys (unknown keys are ignored → no Spaces). */
+/**
+ * Access for a chat holding these Space keys (unknown or archived Spaces' keys are ignored → no Spaces).
+ * The actor name "owner" is reserved for the web app, so a chat asking for it is recorded as "chat:owner".
+ */
 export async function accessFromKeys(keys: string[], actor = "chat"): Promise<Access> {
-  return { actor: actor.trim().slice(0, 100) || "chat", spaces: await resolveKeys(keys) };
+  return { actor: chatActor(actor), spaces: await resolveKeys(keys) };
 }
 
 /**

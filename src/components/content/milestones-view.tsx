@@ -164,7 +164,7 @@ function MilestoneRow({
     <li className="flex items-start gap-4 px-4 py-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs text-fg-subtle">{m.ref}</span>
+          <span className="font-mono text-xs text-fg-muted">{m.ref}</span>
           {m.archivedAt ? (
             <span className="truncate text-[13px] font-medium">{m.title}</span>
           ) : (

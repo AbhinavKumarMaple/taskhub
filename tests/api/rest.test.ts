@@ -151,8 +151,11 @@ describe("tasks round trip", () => {
       }),
     );
     expect(res.status).toBe(400);
-    const dup = await call(spacesRoute.POST, "POST", "/spaces", { body: { name: "validation" } });
+    // Names are unique among the Spaces the caller holds: a duplicate is a 409 only with that Space's key.
+    const dup = await call(spacesRoute.POST, "POST", "/spaces", { key: s.key, body: { name: "validation" } });
     expect(dup.status).toBe(409);
+    const blind = await call(spacesRoute.POST, "POST", "/spaces", { body: { name: "validation" } });
+    expect(blind.status).toBe(201);
   });
 });
 

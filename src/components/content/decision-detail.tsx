@@ -83,9 +83,10 @@ export function DecisionDetail({ decision, selectedSpace }: { decision: Decision
       <div className="flex flex-wrap items-start gap-3 pb-1">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-fg-subtle">{decision.ref}</span>
+            <span className="font-mono text-xs text-fg-muted">{decision.ref}</span>
             <CopyButton value={decision.ref} label={`Copy ${decision.ref}`} size="xs" />
-            <DecisionStatusChip status={decision.status} size="xs" />
+            {/* The status select on the right shows it while the decision is editable. */}
+            {archived && <DecisionStatusChip status={decision.status} size="xs" />}
             <SpaceChip space={decision.space} />
             {archived && <ArchivedChip />}
           </div>
@@ -138,6 +139,7 @@ export function DecisionDetail({ decision, selectedSpace }: { decision: Decision
           <CopyButton
             value={() => window.location.origin + href(`/decisions/${decision.ref}`)}
             label="Copy link"
+            icon="link"
             variant="secondary"
             size="md"
           />

@@ -9,7 +9,8 @@ import { SpaceDot, StatusChip, TypeChip } from "@/components/ui/chip";
 import { Kbd } from "@/components/ui/misc";
 import { cn } from "@/lib/cn";
 import { decisionHref, documentHref, href, NAV_ITEMS, taskHref } from "@/lib/nav";
-import type { SearchResult, SpaceColor } from "@/lib/types";
+import type { DecisionStatus, SearchResult, SpaceColor } from "@/lib/types";
+import { DecisionStatusChip } from "@/components/content/shared";
 
 const OPEN_EVENT = "taskhub:palette";
 
@@ -205,7 +206,12 @@ export function CommandPalette({ spaceId, spaces }: { spaceId?: string; spaces: 
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {r.kind === "task" && r.type && <TypeChip type={r.type} />}
-                    {r.status && <StatusChip status={r.status} size="xs" />}
+                    {r.status &&
+                      (r.kind === "decision" ? (
+                        <DecisionStatusChip status={r.status as DecisionStatus} size="xs" />
+                      ) : (
+                        <StatusChip status={r.status} size="xs" />
+                      ))}
                     {!spaceId || allSpaces ? (
                       <span className="flex items-center gap-1 text-xs text-fg-subtle">
                         <SpaceDot color={r.space.color} className="size-1.5" />

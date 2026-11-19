@@ -119,7 +119,7 @@ function DepList({
                 <IconButton
                   label={`Remove ${n.ref}`}
                   size="xs"
-                  className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                  className="touch-reveal opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                   onClick={() => onRemove(n.ref)}
                 >
                   <X className="size-3" />

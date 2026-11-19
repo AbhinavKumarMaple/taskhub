@@ -7,6 +7,7 @@ import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { formatDateTime, relativeTime } from "@/lib/format";
 import type { Comment } from "@/lib/types";
 import { Section } from "./section";
+import { useUnsaved } from "./unsaved";
 
 /** Comment list (oldest first) and a markdown box to add one. */
 export function Comments({
@@ -20,6 +21,7 @@ export function Comments({
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useUnsaved(!!body.trim());
   const submit = async () => {
     if (!body.trim() || busy) return;
     setBusy(true);

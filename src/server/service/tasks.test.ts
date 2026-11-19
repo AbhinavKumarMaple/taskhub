@@ -393,3 +393,40 @@ describe("comments and export", () => {
     expect(md).toContain("AC 0/1");
   });
 });
+
+describe("reparenting", () => {
+  it("moves a task (and its subtasks) under a new parent with new refs, keeping history", async () => {
+    const { space, chat } = await makeSpace();
+    const a = await createTask(chat, { title: "A" });
+    const b = await createTask(chat, { title: "B" });
+    const child = await createTask(chat, { parent: a.ref, title: "child" });
+    const grand = await createTask(chat, { parent: child.ref, title: "grandchild" });
+    await addComment(chat, child.ref, { body: "keep me" });
+
+    const moved = await updateTask(chat, child.ref, { parent: b.ref });
+    expect(moved.ref).toBe(`${b.ref}.1`);
+    expect(moved.parent?.ref).toBe(b.ref);
+    expect(moved.children.map((c) => c.ref)).toEqual([`${b.ref}.1.1`]);
+    expect(moved.comments.map((c) => c.body)).toEqual(["keep me"]);
+    expect(moved.activity.map((r) => r.action)).toEqual(expect.arrayContaining(["moved", "commented", "created"]));
+    await expect(getTask(chat, child.ref)).rejects.toMatchObject({ code: "not_found" });
+    expect((await getTask(chat, `${b.ref}.1.1`)).title).toBe(grand.title);
+    expect((await getTask(chat, a.ref)).children).toEqual([]);
+
+    // back to top level
+    const top = await updateTask(chat, moved.ref, { parent: null });
+    expect(top.ref).toMatch(/^T-\d+$/);
+    expect(top.parent).toBeNull();
+    expect(top.children.map((c) => c.ref)).toEqual([`${top.ref}.1`]);
+
+    // no cycles, same Space only
+    await expect(updateTask(chat, top.ref, { parent: `${top.ref}.1` })).rejects.toMatchObject({ code: "invalid" });
+    await expect(updateTask(chat, top.ref, { parent: top.ref })).rejects.toMatchObject({ code: "invalid" });
+    const other = await makeSpace();
+    const foreign = await createTask(other.chat, { title: "elsewhere" });
+    await expect(updateTask(OWNER, top.ref, { parent: foreign.ref })).rejects.toMatchObject({ code: "invalid" });
+    // a chat cannot use a parent outside its Spaces
+    await expect(updateTask(chat, top.ref, { parent: foreign.ref })).rejects.toMatchObject({ code: "not_found" });
+    expect(space.id).toBe(top.space.id);
+  });
+});

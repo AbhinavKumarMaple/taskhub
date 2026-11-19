@@ -9,6 +9,7 @@ import { Markdown } from "@/components/ui/markdown";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { cn } from "@/lib/cn";
 import { Section } from "./section";
+import { useUnsaved } from "./unsaved";
 
 /** Heading-sized title input: saves on Enter or blur, Esc reverts. */
 export function InlineTitle({ value, onSave, disabled }: { value: string; onSave: (v: string) => void; disabled?: boolean }) {
@@ -144,6 +145,7 @@ export function StringList({
 }) {
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState("");
+  useUnsaved(adding && !!text.trim());
   const submit = () => {
     const add = text
       .split("\n")
@@ -182,7 +184,7 @@ export function StringList({
               <IconButton
                 label={`Remove ${v}`}
                 size="xs"
-                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                className="touch-reveal opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                 onClick={() => onChange(values.filter((x) => x !== v))}
               >
                 <X className="size-3" />
@@ -244,6 +246,13 @@ export function MarkdownField({
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value);
+  const dirty = editing && text !== value;
+  useUnsaved(dirty);
+  /** Leave edit mode; asks first when the edit would be thrown away. */
+  const cancel = () => {
+    if (dirty && !window.confirm(`Discard your changes to ${title.toLowerCase()}?`)) return;
+    setEditing(false);
+  };
   const start = () => {
     setText(value);
     setEditing(true);
@@ -270,14 +279,14 @@ export function MarkdownField({
             if (e.key === "Escape") {
               e.preventDefault();
               e.stopPropagation();
-              setEditing(false);
+              cancel();
             }
           }}
         >
           <MarkdownEditor value={text} onChange={setText} rows={rows} autoFocus onSubmit={save} aria-label={title} />
           <div className="flex items-center justify-end gap-2">
             <span className="mr-auto text-xs text-fg-subtle">⌘Enter to save · Esc to cancel</span>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            <Button size="sm" variant="ghost" onClick={cancel}>
               Cancel
             </Button>
             <Button size="sm" variant="primary" onClick={save}>
