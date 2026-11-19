@@ -11,7 +11,9 @@ export function buildCurlGuide(base: string): string {
   return `# Taskhub — guide for chats (curl)
 
 Taskhub is the owner's task tracker. You read and write it with plain HTTP calls to \`${api}\`.
-Every response is JSON unless noted. Read this whole page once, then follow the rules below.
+Responses are JSON, except this guide and \`/board.md\` (markdown). Read this whole page once, then follow the rules below.
+Refs like \`T-12\` in the examples are placeholders: refs are global across all Spaces, so always read the real ref
+from the response of the call that created the item.
 
 ## 1. Credentials
 
@@ -58,14 +60,22 @@ Track before you start, without asking permission.
    curl -s -X POST ${api}/tasks ${H} ${J} -d '{"title":"Monthly list","parent":"T-12","acceptance_criteria":["Lists every month"]}'
    curl -s -X PATCH ${api}/tasks/T-12 ${H} ${J} -d '{"add_ac":["T-12.1 Monthly list"]}'
    \`\`\`
-3. **Start**: set the item and its feature to In Progress; write the plan for anything non-trivial.
-   \`curl -s -X PATCH ${api}/tasks/T-12.1 ${H} ${J} -d '{"status":"In Progress","append_plan":"1. …"}'\`
+   A child created with \`parent\` gets type \`sub-feature\` by default; send \`"type":"fix"\` for a fix.
+3. **Start**: set the item AND its feature to In Progress (the feature does not move by itself); write the plan
+   for anything non-trivial.
+   \`\`\`bash
+   curl -s -X PATCH ${api}/tasks/T-12.1 ${H} ${J} -d '{"status":"In Progress","append_plan":"1. …"}'
+   curl -s -X PATCH ${api}/tasks/T-12 ${H} ${J} -d '{"status":"In Progress"}'
+   \`\`\`
    A feature stays In Progress until all its children are Done; never move it back to To Do.
-4. **Progress**: \`{"append_notes":"…"}\`. Tick a check only once verified: \`{"check_ac":[1]}\` (1-based).
+4. **Progress**: \`{"append_notes":"…"}\`. Tick a check only once verified: \`{"check_ac":[1]}\` (1-based;
+   several at once: \`[1,2]\`).
 5. **Waiting** on the owner: add the label to the item AND its feature, and say why:
    \`{"add_labels":["waiting"],"append_notes":"Waiting on: …"}\`; when unblocked \`{"remove_labels":["waiting"]}\`.
-6. **Done**: \`{"final_summary":"…","modified_files":["…"],"status":"Done"}\`, then tick the feature's check for
-   that child (\`{"check_ac":[n]}\`). Close the feature the same way when every child is Done.
+6. **Done**: tick the item's own verified checks and close it in one call:
+   \`{"check_ac":[1,2],"final_summary":"…","modified_files":["…"],"status":"Done"}\`, then tick the feature's check
+   for that child (\`{"check_ac":[n]}\`). The feature never closes by itself: when every child is Done, close it
+   the same way (\`final_summary\` + \`"status":"Done"\`).
 7. **Minor**: once the tweak is done,
    \`curl -s -X POST ${api}/tasks ${H} ${J} -d '{"title":"…","type":"minor","status":"Done","final_summary":"…"}'\`
    then \`curl -s -X POST ${api}/tasks/T-NN/archive ${H}\`.
