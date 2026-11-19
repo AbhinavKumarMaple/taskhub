@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/ui/misc";
+import { SpacesView } from "@/components/content/spaces-view";
+import { requireOwner } from "@/server/auth";
+import { getSettings, listSpaces } from "@/server/service";
 
 export const metadata: Metadata = { title: "Spaces" };
 
-// Placeholder: replaced by the spaces builder.
-export default function SpacesPage() {
-  return <PageHeader title="Spaces" />;
+export default async function SpacesPage() {
+  const access = await requireOwner();
+  const [spaces, settings] = await Promise.all([listSpaces(access, { includeArchived: true }), getSettings(access)]);
+  return <SpacesView spaces={spaces} statuses={settings.statuses} />;
 }
