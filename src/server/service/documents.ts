@@ -10,6 +10,7 @@ import {
   updateDocumentInput,
   type ListEntitiesInput,
 } from "../validation";
+import { fieldList } from "@/lib/field-labels";
 import type { Access, DocumentFull, DocumentSummary } from "@/lib/types";
 import {
   allWordsMatch,
@@ -127,7 +128,7 @@ export async function updateDocument(
       entityType: "document",
       entityRef: cur.ref,
       action: "updated",
-      summary: `Updated document ${cur.ref} (${Object.keys(changes).join(", ")})`,
+      summary: `Updated document ${cur.ref} (${fieldList(Object.keys(changes))})`,
       changes,
     });
     return cur.id;

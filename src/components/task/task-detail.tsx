@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Chip, SpaceChip, SpaceDot, TypeChip } from "@/components/ui/chip";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { DropdownMenu, type MenuItem } from "@/components/ui/dropdown-menu";
-import { Input, Select } from "@/components/ui/input";
+import { Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { formatDate, formatDateTime, formatDue } from "@/lib/format";
@@ -43,7 +43,7 @@ import { ActivityTimeline } from "./activity-timeline";
 import { Checklist } from "./checklist";
 import { Comments } from "./comments";
 import { Dependencies, RefPicker } from "./dependencies";
-import { InlineTitle, MarkdownField, StringList, TagInput } from "./fields";
+import { DateInput, InlineTitle, MarkdownField, StringList, TagInput } from "./fields";
 import { applyOptimistic } from "./optimistic";
 import { PropRow, Section } from "./section";
 import { Subtasks } from "./subtasks";
@@ -313,13 +313,12 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
       </PropRow>
       <PropRow label="Due date" htmlFor={`${ref}-due`}>
         <div className="flex items-center gap-2">
-          <Input
+          <DateInput
             id={`${ref}-due`}
-            type="date"
             inputSize="sm"
             className={cn("w-40", due?.overdue && "text-danger")}
             value={task.dueDate ?? ""}
-            onChange={(e) => save({ dueDate: e.target.value || null })}
+            onSave={(v) => void save({ dueDate: v || null })}
           />
           {due?.overdue && <Chip tone="danger" size="xs">Overdue</Chip>}
           {due?.today && <Chip tone="waiting" size="xs">Today</Chip>}

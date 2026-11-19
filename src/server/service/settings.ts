@@ -3,6 +3,7 @@ import { getDb, type DbOrTx } from "../db";
 import { settings, tasks } from "../db/schema";
 import { Conflict, Invalid } from "../errors";
 import { parse, updateSettingsInput, type UpdateSettingsInput } from "../validation";
+import { fieldList } from "@/lib/field-labels";
 import type { Access, Settings } from "@/lib/types";
 import { diff, logActivity, requireOwnerAccess, withTx } from "./context";
 
@@ -126,7 +127,7 @@ export async function updateSettings(access: Access, input: UpdateSettingsInput)
         entityType: "settings",
         entityRef: "settings",
         action: "updated",
-        summary: `Updated settings (${Object.keys(changes).join(", ")})`,
+        summary: `Updated settings (${fieldList(Object.keys(changes))})`,
         changes,
       });
     }

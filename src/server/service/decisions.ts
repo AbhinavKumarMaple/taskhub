@@ -10,6 +10,7 @@ import {
   updateDecisionInput,
   type ListEntitiesInput,
 } from "../validation";
+import { fieldList } from "@/lib/field-labels";
 import type { Access, DecisionFull, DecisionStatus, DecisionSummary } from "@/lib/types";
 import {
   allWordsMatch,
@@ -141,7 +142,7 @@ export async function updateDecision(access: Access, ref: string, input: Decisio
       action: changes.status ? "status" : "updated",
       summary: changes.status
         ? `Decision ${cur.ref} "${cur.title}": ${cur.status} → ${p.status}`
-        : `Updated decision ${cur.ref} (${Object.keys(changes).join(", ")})`,
+        : `Updated decision ${cur.ref} (${fieldList(Object.keys(changes))})`,
       changes,
     });
     return cur.id;

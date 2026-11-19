@@ -117,6 +117,13 @@ describe("update", () => {
     expect(same.activity.length).toBe(before);
   });
 
+  it("names fields in plain words in the activity summary", async () => {
+    const { space } = await makeSpace();
+    const t = await createTask(OWNER, { spaceId: space.id, title: "Summary words" });
+    const u = await updateTask(OWNER, t.ref, { dueDate: "2027-01-20", finalSummary: "Done." });
+    expect(u.activity[0].summary).toBe(`Updated ${t.ref} (due date, final summary)`);
+  });
+
   it("supports every AC op and setAc keeps checks on identical text", async () => {
     const { space } = await makeSpace();
     const t = await createTask(OWNER, { spaceId: space.id, title: "AC", acceptanceCriteria: ["a", "b", "c"] });

@@ -10,6 +10,7 @@ import {
   updateMilestoneInput,
   type ListEntitiesInput,
 } from "../validation";
+import { fieldList } from "@/lib/field-labels";
 import type { Access, Milestone, MilestoneFull } from "@/lib/types";
 import {
   allWordsMatch,
@@ -156,7 +157,7 @@ export async function updateMilestone(
       entityType: "milestone",
       entityRef: cur.ref,
       action: "updated",
-      summary: `Updated milestone ${cur.ref} (${Object.keys(changes).join(", ")})`,
+      summary: `Updated milestone ${cur.ref} (${fieldList(Object.keys(changes))})`,
       changes,
     });
     return cur.id;

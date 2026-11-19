@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, Pencil, Plus, X } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Button, IconButton } from "@/components/ui/button";
 import { LabelChip } from "@/components/ui/chip";
 import { fieldClass, Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Markdown } from "@/components/ui/markdown";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { cn } from "@/lib/cn";
 import { Section } from "./section";
+import { isCommittableDate } from "./date-commit";
 import { useUnsaved } from "./unsaved";
 
 /** Heading-sized title input: saves on Enter or blur, Esc reverts. */
@@ -44,6 +45,55 @@ export function InlineTitle({ value, onSave, disabled }: { value: string; onSave
         }
       }}
       className="field-sizing-content -mx-1.5 block w-[calc(100%+0.75rem)] resize-none rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-lg font-semibold leading-snug text-fg hover:border-border focus:border-accent focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-100"
+    />
+  );
+}
+
+/**
+ * Date input that saves a finished date, not every keystroke: partial years (0002, 0020, …) are never sent,
+ * quick edits are coalesced, and leaving the box flushes the last full value (or reverts a partial one).
+ */
+export function DateInput({
+  value,
+  onSave,
+  ...rest
+}: { value: string; onSave: (v: string) => void } & Omit<ComponentProps<typeof Input>, "value" | "onChange" | "type" | "onBlur">) {
+  const [text, setText] = useState(value);
+  const [prev, setPrev] = useState(value);
+  if (value !== prev) {
+    setPrev(value);
+    setText(value);
+  }
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clear = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => clear, []);
+  const commit = (v: string) => {
+    clear();
+    if (isCommittableDate(v) && v !== value) onSave(v);
+  };
+  return (
+    <Input
+      {...rest}
+      type="date"
+      value={text}
+      onChange={(e) => {
+        const v = e.target.value;
+        setText(v);
+        clear();
+        if (isCommittableDate(v, e.target.validity.badInput) && v !== value) {
+          timer.current = setTimeout(() => commit(v), 500);
+        }
+      }}
+      onBlur={(e) => {
+        if (isCommittableDate(text, e.currentTarget.validity.badInput)) commit(text);
+        else {
+          clear();
+          setText(value);
+        }
+      }}
     />
   );
 }

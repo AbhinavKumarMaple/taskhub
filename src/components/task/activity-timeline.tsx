@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { fieldLabel } from "@/lib/field-labels";
 import { formatDateTime, relativeTime } from "@/lib/format";
 import type { Activity, ActivityAction, FieldChanges } from "@/lib/types";
 import { Section } from "./section";
@@ -33,16 +34,6 @@ const ICONS: Record<ActivityAction, LucideIcon> = {
   moved: MoveRight,
 };
 
-export const FIELD_LABELS: Record<string, string> = {
-  acceptanceCriteria: "acceptance criteria",
-  definitionOfDone: "definition of done",
-  finalSummary: "final summary",
-  modifiedFiles: "modified files",
-  dueDate: "due date",
-  spaceId: "Space",
-  dependsOn: "depends on",
-  isDraft: "draft",
-};
 
 /** Internal bookkeeping fields that mean nothing to a reader (board position, child ref counter). */
 const HIDDEN_FIELDS = new Set(["ordinal", "childCounter"]);
@@ -70,7 +61,7 @@ export function Diff({ changes }: { changes: FieldChanges }) {
     <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 rounded-md bg-surface-2 px-2 py-1.5 text-xs">
       {entries.map(([field, { from, to }]) => (
         <div key={field} className="contents">
-          <dt className="text-fg-muted">{FIELD_LABELS[field] ?? field}</dt>
+          <dt className="text-fg-muted">{fieldLabel(field)}</dt>
           <dd className="min-w-0 break-words">
             <span className="text-fg-subtle line-through decoration-fg-subtle/50">{formatValue(from)}</span>
             <span className="px-1 text-fg-subtle" aria-label="changed to">

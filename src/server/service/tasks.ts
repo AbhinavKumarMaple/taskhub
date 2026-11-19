@@ -54,6 +54,7 @@ import {
   withTx,
 } from "./context";
 import { loadSettings } from "./settings";
+import { fieldList } from "@/lib/field-labels";
 
 const STEP = 1024;
 const parentT = alias(tasks, "parent_t");
@@ -774,8 +775,8 @@ export async function updateTask(access: Access, ref: string, input: UpdateTaskI
       entityRef: cur.ref,
       action: statusChanged ? "status" : "updated",
       summary: statusChanged
-        ? `${cur.ref} "${(next.title as string) ?? cur.title}": ${cur.status} → ${p.status}${fields.length > 1 ? ` (also ${fields.filter((f) => f !== "status").join(", ")})` : ""}`
-        : `Updated ${cur.ref} (${fields.join(", ")})`,
+        ? `${cur.ref} "${(next.title as string) ?? cur.title}": ${cur.status} → ${p.status}${fields.length > 1 ? ` (also ${fieldList(fields.filter((f) => f !== "status"))})` : ""}`
+        : `Updated ${cur.ref} (${fieldList(fields)})`,
       changes,
     });
     return cur.ref;
