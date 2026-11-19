@@ -75,7 +75,7 @@ export function DecisionDetail({ decision, selectedSpace }: { decision: Decision
       ];
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-4xl">
       <Link href={listHref} className="mb-3 inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg">
         <ArrowLeft className="size-3.5" aria-hidden /> Decisions
       </Link>

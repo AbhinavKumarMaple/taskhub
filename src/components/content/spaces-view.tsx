@@ -44,7 +44,7 @@ export function SpacesView({ spaces, statuses }: { spaces: SpaceWithCounts[]; st
   });
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div>
       <PageHeader
         title="Spaces"
         description="Each Space is a separate board. A chat can only see the Spaces whose key it holds; give a chat another key to share that work with it."

@@ -75,7 +75,7 @@ const SECTIONS: {
 
 export function SettingsView({ settings }: { settings: Settings }) {
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-3xl">
       <PageHeader
         title="Settings"
         description={

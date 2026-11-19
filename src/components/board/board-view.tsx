@@ -20,6 +20,7 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useOptimistic,
   useRef,
@@ -116,6 +117,7 @@ export function BoardView(props: BoardViewProps) {
   const dragging = useRef(false);
   const items = dragItems ?? baseItems;
 
+  const dndId = useId(); // stable id so server and client markup match
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
@@ -310,6 +312,7 @@ export function BoardView(props: BoardViewProps) {
       )}
 
       <DndContext
+        id={dndId}
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={onDragStart}

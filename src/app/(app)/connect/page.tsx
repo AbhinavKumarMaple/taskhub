@@ -25,7 +25,7 @@ export default async function ConnectPage() {
   const token = authEnv("AGENT_TOKEN");
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-4xl">
       <PageHeader
         title="Connect"
         description="Give a chat access to Taskhub over MCP or the REST API, and paste the tracking rules into its instructions."

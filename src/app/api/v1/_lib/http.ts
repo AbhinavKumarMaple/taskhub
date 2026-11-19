@@ -4,6 +4,7 @@
  */
 import type { Access } from "@/lib/types";
 import { getApiAccess } from "@/server/auth";
+import { unstable_rethrow } from "next/navigation";
 import { errorResponse, Invalid } from "@/server/errors";
 
 export type ApiContext<P> = {
@@ -103,6 +104,7 @@ export function api<P = Record<string, never>>(
       if (out instanceof Response) return out;
       return Response.json(out, { status: opts.status ?? 200, headers: NO_STORE });
     } catch (err) {
+      unstable_rethrow(err); // let Next see its own prerender/dynamic signals
       return errorResponse(err);
     }
   };

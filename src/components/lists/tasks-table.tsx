@@ -11,23 +11,22 @@ import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/format";
 import { withParams } from "@/lib/nav";
 import type { TaskSummary } from "@/lib/types";
-
-export const PAGE_SIZE = 50;
+import { PAGE_SIZE } from "./constants";
 
 type Col = { key: string; label: string; sort?: string; className?: string };
 
 const COLUMNS: Col[] = [
-  { key: "ref", label: "Ref", sort: "ref", className: "w-24" },
+  { key: "ref", label: "Ref", sort: "ref", className: "w-20" },
   { key: "title", label: "Title", sort: "title" },
-  { key: "status", label: "Status", sort: "status", className: "w-32" },
-  { key: "type", label: "Type", sort: "type", className: "w-28" },
-  { key: "priority", label: "Priority", sort: "priority", className: "w-20" },
-  { key: "space", label: "Space", sort: "space", className: "w-36" },
-  { key: "labels", label: "Labels", className: "w-32" },
-  { key: "assignee", label: "Assignee", className: "w-28" },
-  { key: "milestone", label: "Milestone", sort: "milestone", className: "w-36" },
+  { key: "status", label: "Status", sort: "status", className: "w-28" },
+  { key: "type", label: "Type", sort: "type", className: "w-24" },
+  { key: "priority", label: "Priority", sort: "priority", className: "w-16" },
+  { key: "space", label: "Space", sort: "space", className: "w-28" },
+  { key: "labels", label: "Labels", className: "w-24" },
+  { key: "assignee", label: "Assignee", className: "w-24" },
+  { key: "milestone", label: "Milestone", sort: "milestone", className: "w-28" },
   { key: "ac", label: "AC", sort: "ac", className: "w-16" },
-  { key: "updated", label: "Updated", sort: "updated", className: "w-24" },
+  { key: "updated", label: "Updated", sort: "updated", className: "w-20" },
 ];
 
 /** Opens a task in the URL-driven sheet (`?task=REF`), keeping every other param. */

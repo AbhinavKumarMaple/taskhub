@@ -54,7 +54,7 @@ export function TaskSheet({ taskRef, onClose }: TaskSheetProps) {
       title={<span className="font-mono">{ref}</span>}
       actions={
         ref && (
-          <Link href={taskHref(ref, sp.get("space"))} className={buttonClass("ghost", "sm", "size-7 px-0")} aria-label="Open full page" title="Open full page">
+          <Link href={taskHref(ref, sp.get("space"))} className={buttonClass("ghost", "sm", undefined, true)} aria-label="Open full page" title="Open full page">
             <Maximize2 className="size-3.5" />
           </Link>
         )

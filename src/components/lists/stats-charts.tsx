@@ -9,7 +9,7 @@ export function StatCard({ label, value, hint }: { label: string; value: React.R
     <div className="rounded-lg border border-border bg-surface p-4">
       <p className="text-xs font-medium text-fg-muted">{label}</p>
       <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
-      {hint && <p className="mt-1 text-xs text-fg-subtle">{hint}</p>}
+      {hint && <div className="mt-1 text-xs text-fg-subtle">{hint}</div>}
     </div>
   );
 }

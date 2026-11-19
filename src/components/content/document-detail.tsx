@@ -49,7 +49,7 @@ export function DocumentDetail({ doc, selectedSpace }: { doc: DocumentFull; sele
     : [{ label: "Archive", icon: <Archive />, onSelect: () => run(() => archiveDocumentAction(doc.ref), { success: `Archived ${doc.ref}` }) }];
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-4xl">
       <Link href={listHref} className="mb-3 inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg">
         <ArrowLeft className="size-3.5" aria-hidden /> Documents
       </Link>

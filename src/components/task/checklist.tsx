@@ -12,7 +12,7 @@ import {
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button, IconButton } from "@/components/ui/button";
 import { Checkbox, Input } from "@/components/ui/input";
 import { ProgressBar } from "@/components/ui/misc";
@@ -49,6 +49,7 @@ export function Checklist({
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const done = items.filter((i) => i.checked).length;
+  const dndId = useId(); // stable id so server and client markup match
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -94,7 +95,7 @@ export function Checklist({
       {items.length > 0 && <ProgressBar value={done} max={items.length} tone="auto" />}
       {items.length === 0 && !adding && <p className="text-[13px] text-fg-subtle">{emptyText}</p>}
       {items.length > 0 && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={ids} strategy={verticalListSortingStrategy}>
             <ul className="mt-2 flex flex-col">
               {items.map((it, i) => (

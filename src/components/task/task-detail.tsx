@@ -495,7 +495,7 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="flex max-w-6xl flex-col gap-4">
       {topBar}
       {banners}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">

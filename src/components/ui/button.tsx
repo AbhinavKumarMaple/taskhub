@@ -13,18 +13,27 @@ const VARIANTS: Record<ButtonVariant, string> = {
   danger: "bg-danger text-white hover:bg-danger-hover border border-transparent",
 };
 const SIZES: Record<ButtonSize, string> = {
-  xs: "h-6 px-2 text-xs gap-1 rounded-[5px]",
-  sm: "h-7 px-2.5 text-[13px] gap-1.5 rounded-md",
-  md: "h-8 px-3 text-[13px] gap-1.5 rounded-md",
+  xs: "h-6 text-xs gap-1 rounded-[5px]",
+  sm: "h-7 text-[13px] gap-1.5 rounded-md",
+  md: "h-8 text-[13px] gap-1.5 rounded-md",
 };
+/** Side padding for labelled buttons. Kept apart so icon-only buttons never fight it (cn does not merge). */
+const PADDING: Record<ButtonSize, string> = { xs: "px-2", sm: "px-2.5", md: "px-3" };
+const ICON_SIZES: Record<ButtonSize, string> = { xs: "size-6", sm: "size-7", md: "size-8" };
 
-/** Class string for a button look — use on <Link> / <a> too. */
-export function buttonClass(variant: ButtonVariant = "secondary", size: ButtonSize = "md", className?: string) {
+/** Class string for a button look — use on <Link> / <a> too. `iconOnly` makes it a square with no side padding. */
+export function buttonClass(
+  variant: ButtonVariant = "secondary",
+  size: ButtonSize = "md",
+  className?: string,
+  iconOnly = false,
+) {
   return cn(
-    "inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-medium transition-colors",
+    "inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-medium transition-colors [&_svg]:shrink-0",
     "disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50",
     VARIANTS[variant],
     SIZES[size],
+    iconOnly ? ICON_SIZES[size] : PADDING[size],
     className,
   );
 }
@@ -65,8 +74,6 @@ export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "chi
   size?: ButtonSize;
 };
 
-const ICON_SIZES: Record<ButtonSize, string> = { xs: "size-6", sm: "size-7", md: "size-8" };
-
 /** Square icon-only button with an aria-label + title. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   { label, children, variant = "ghost", size = "sm", className, type = "button", ...rest },
@@ -78,7 +85,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       type={type}
       aria-label={label}
       title={label}
-      className={cn(buttonClass(variant, size), ICON_SIZES[size], "px-0", className)}
+      className={buttonClass(variant, size, className, true)}
       {...rest}
     >
       {children}

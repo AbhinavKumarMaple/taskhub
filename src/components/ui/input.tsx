@@ -17,6 +17,9 @@ export const fieldClass = cn(
   "disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-danger",
 );
 
+/** True when the caller sets its own width class. */
+const hasWidth = (className?: string) => /(^|\s)w-/.test(className ?? "");
+
 export type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   /** Icon shown inside the field on the left. */
   icon?: ReactNode;
@@ -28,7 +31,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   ref,
 ) {
   const h = inputSize === "sm" ? "h-7" : "h-8";
-  if (!icon) return <input ref={ref} className={cn(fieldClass, h, "px-2.5", className)} {...rest} />;
+  // cn is plain clsx (no class merging), so a caller width like "w-32" must replace fieldClass's w-full.
+  if (!icon) return <input ref={ref} className={cn(hasWidth(className) ? fieldClass.replace(/(^|\s)w-full(?=\s|$)/, "$1") : fieldClass, h, "px-2.5", className)} {...rest} />;
   return (
     <div className={cn("relative", className)}>
       <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-fg-subtle [&_svg]:size-3.5">

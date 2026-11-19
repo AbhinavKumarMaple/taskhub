@@ -40,7 +40,7 @@ export function MilestonesView({ milestones, spaces, selectedSpace, archived, fi
 
   const canCreate = spaces.length > 0;
   return (
-    <div className="mx-auto max-w-5xl">
+    <div>
       <PageHeader
         title="Milestones"
         description="Group tasks toward a goal or date. The board can show one swimlane per milestone."

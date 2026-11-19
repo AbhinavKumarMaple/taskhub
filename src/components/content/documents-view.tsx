@@ -29,7 +29,7 @@ export function DocumentsView({ documents, spaces, selectedSpace, archived, filt
   const [creating, setCreating] = useState(false);
   const canCreate = spaces.length > 0;
   return (
-    <div className="mx-auto max-w-5xl">
+    <div>
       <PageHeader
         title="Documents"
         description="Notes, specs and how-tos in markdown, kept per Space."

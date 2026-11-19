@@ -49,7 +49,7 @@ export function CopyButton({
       onClick={copy}
       aria-label={children ? undefined : label}
       title={label}
-      className={cn(buttonClass(variant, size), !children && (size === "xs" ? "size-6 px-0" : size === "sm" ? "size-7 px-0" : "size-8 px-0"), className)}
+      className={buttonClass(variant, size, className, !children)}
     >
       <Icon className={cn("size-3.5", copied && "text-done")} aria-hidden />
       {children}

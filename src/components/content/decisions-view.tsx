@@ -47,7 +47,7 @@ export function DecisionsView({ decisions, total, counts, status, spaces, select
   ];
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div>
       <PageHeader
         title="Decisions"
         description="Architecture-style decision records: the context, what was decided and what follows from it."
