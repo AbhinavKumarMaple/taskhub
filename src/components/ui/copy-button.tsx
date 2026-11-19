@@ -1,0 +1,61 @@
+"use client";
+
+import { Check, Copy } from "lucide-react";
+import { useState } from "react";
+import { cn } from "@/lib/cn";
+import { buttonClass, type ButtonSize, type ButtonVariant } from "./button";
+
+/** Copies `value`; icon-only unless `children`/`label` text is given. */
+export function CopyButton({
+  value,
+  label = "Copy",
+  children,
+  variant = "ghost",
+  size = "sm",
+  className,
+  onCopied,
+}: {
+  value: string | (() => string);
+  /** Accessible name + tooltip. */
+  label?: string;
+  /** Visible text next to the icon. */
+  children?: React.ReactNode;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  className?: string;
+  onCopied?: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    const text = typeof value === "function" ? value() : value;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    setCopied(true);
+    onCopied?.();
+    setTimeout(() => setCopied(false), 1500);
+  };
+  const Icon = copied ? Check : Copy;
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label={children ? undefined : label}
+      title={label}
+      className={cn(buttonClass(variant, size), !children && (size === "xs" ? "size-6 px-0" : size === "sm" ? "size-7 px-0" : "size-8 px-0"), className)}
+    >
+      <Icon className={cn("size-3.5", copied && "text-done")} aria-hidden />
+      {children}
+      <span className="sr-only" aria-live="polite">
+        {copied ? "Copied" : ""}
+      </span>
+    </button>
+  );
+}
