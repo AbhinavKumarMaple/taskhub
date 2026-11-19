@@ -79,8 +79,25 @@ export function ConnectView({ origin, token, spaces }: { origin: string; token: 
       `curl ${origin}/api/v1/board.md \\\n  -H "Authorization: Bearer ${t}"${keyHeader(k)}`,
     ].join("\n");
 
+  const chatBrief = (t: string, k: string) =>
+    [
+      `Track your work in Taskhub over its REST API with curl.`,
+      `First read the guide: curl -s ${origin}/api/v1 — then follow it.`,
+      `Token: TASKHUB_TOKEN=${t}`,
+      k
+        ? `Space key: TASKHUB_KEY=${k}`
+        : `No Space key yet: create a Space for this chat (POST /api/v1/spaces) and tell me its key.`,
+    ].join("\n");
+
   return (
     <div className="space-y-4">
+      <Section
+        title="Give this to any chat"
+        description="Paste it into a chat that can run curl. It reads the guide at /api/v1 and tracks its work from there; no setup on the chat's side."
+      >
+        <CodeBlock label="Message for the chat" shown={chatBrief(shownToken, shownKey)} copy={chatBrief(token, space?.key ?? "")} />
+      </Section>
+
       <Section
         title="Credentials"
         description="Every chat uses the same agent token. What a chat can see is decided by the Space keys it passes."
