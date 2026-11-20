@@ -51,6 +51,10 @@ const taskFields = {
   references: strs.optional(),
   documentation: strs.optional(),
   modified_files: strs.optional(),
+  deployable: z
+    .boolean()
+    .optional()
+    .describe("Ships code: track its deploys per environment (Development, Production). Plain tasks leave it false"),
 };
 
 const createFields = {
@@ -106,6 +110,9 @@ const listFields = {
   milestone: z.string().optional().describe('Milestone ref, or "none"'),
   parent: z.string().optional().describe("Children of this ref"),
   top_level_only: z.boolean().optional(),
+  deployable: z.boolean().optional().describe("true: only tasks that ship code; false: only plain tasks"),
+  deployed_to: strOrList.optional().describe("Deployed to all of these environments"),
+  not_deployed_to: z.string().optional().describe("Ships code but not yet deployed to this environment"),
   q: z.string().optional().describe("Every word must match, any order"),
   include_archived: z.boolean().optional(),
   archived_only: z.boolean().optional(),
@@ -331,6 +338,52 @@ export function registerTools(server: McpServer, getAccess: GetAccess) {
       const c = await svc.addComment(access, String(args.ref), { body: String(args.body) });
       return { text: `Commented on ${String(args.ref).toUpperCase()}`, data: c };
     },
+  );
+
+  const deployArgs = {
+    environment: z.string().describe("Development | Production (see space_info)"),
+    version: z.string().optional().describe("Commit, tag or build id"),
+    url: z.string().optional().describe("Deploy or preview link (http/https)"),
+    note: z.string().optional(),
+  };
+  tool(
+    "task_deploy",
+    "Record that a deploy shipped tasks to an environment (one push often ships several: pass them all). Marks each one as shipping code and adds a step to its deploy history. include_children also marks every sub-task of the refs.",
+    { refs: strs.describe("Task refs this deploy shipped"), include_children: z.boolean().optional(), ...deployArgs },
+    async (args, access) => {
+      const items = await svc.recordDeployment(access, toInput(args) as Parameters<typeof svc.recordDeployment>[1]);
+      return {
+        text: `Deployed to ${String(args.environment)}:\n${items.map((t) => fmt.taskLine(t)).join("\n")}`,
+        data: { items },
+      };
+    },
+  );
+  tool(
+    "task_rollback",
+    "Take a task's deploy off an environment (rolled back, or it never really shipped). Kept in its deploy history.",
+    { ref, environment: deployArgs.environment, note: z.string().optional().describe("Why") },
+    async (args, access) =>
+      taskOut(
+        "Rolled back",
+        await svc.rollbackDeployment(access, String(args.ref), {
+          environment: String(args.environment),
+          note: args.note as string | undefined,
+        }),
+      ),
+  );
+  tool(
+    "deployments",
+    "Recent deploys and roll-backs across your Spaces, newest first.",
+    { space_id: z.string().optional(), environment: z.string().optional(), limit: z.number().int().min(1).max(500).optional() },
+    async (args, access) => {
+      const items = await svc.listDeployments(access, {
+        spaces: spaceList(args.space_id),
+        environment: args.environment as string | undefined,
+        limit: args.limit as number | undefined,
+      });
+      return { text: fmt.deploymentLogText(items), data: { items } };
+    },
+    { readOnly: true },
   );
 
   tool(

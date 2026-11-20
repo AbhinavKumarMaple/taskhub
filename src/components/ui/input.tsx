@@ -31,14 +31,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   ref,
 ) {
   const h = inputSize === "sm" ? "h-7" : "h-8";
+  // Lets a native <dialog> restore autoFocus after showModal() (see useNativeDialog).
+  const af = rest.autoFocus ? { "data-autofocus": "" } : {};
   // cn is plain clsx (no class merging), so a caller width like "w-32" must replace fieldClass's w-full.
-  if (!icon) return <input ref={ref} className={cn(hasWidth(className) ? fieldClass.replace(/(^|\s)w-full(?=\s|$)/, "$1") : fieldClass, h, "px-2.5", className)} {...rest} />;
+  if (!icon) return <input ref={ref} className={cn(hasWidth(className) ? fieldClass.replace(/(^|\s)w-full(?=\s|$)/, "$1") : fieldClass, h, "px-2.5", className)} {...af} {...rest} />;
   return (
     <div className={cn("relative", className)}>
       <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-fg-subtle [&_svg]:size-3.5">
         {icon}
       </span>
-      <input ref={ref} className={cn(fieldClass, h, "pl-8 pr-2.5")} {...rest} />
+      <input ref={ref} className={cn(fieldClass, h, "pl-8 pr-2.5")} {...af} {...rest} />
     </div>
   );
 });
@@ -50,6 +52,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
         ref={ref}
         rows={rows}
         className={cn(fieldClass, "min-h-16 resize-y px-2.5 py-2 leading-relaxed", className)}
+        {...(rest.autoFocus ? { "data-autofocus": "" } : {})}
         {...rest}
       />
     );

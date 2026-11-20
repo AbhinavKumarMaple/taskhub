@@ -8,7 +8,7 @@ import { Input, Select } from "@/components/ui/input";
 import { withParams } from "@/lib/nav";
 import { MultiSelect } from "./multi-select";
 
-const FILTER_KEYS = ["q", "status", "xstatus", "type", "priority", "label", "assignee", "milestone"] as const;
+const FILTER_KEYS = ["q", "status", "xstatus", "type", "priority", "label", "assignee", "milestone", "deploy"] as const;
 
 const list = (s: string | null) => (s ? s.split(",").map((x) => x.trim()).filter(Boolean) : []);
 const opts = (values: string[]) => values.map((v) => ({ value: v, label: v }));
@@ -20,12 +20,15 @@ export function TaskFilters({
   priorities,
   labels,
   milestones,
+  environments = [],
 }: {
   statuses: string[];
   types: string[];
   priorities: string[];
   labels: string[];
   milestones: { ref: string; title: string }[];
+  /** Deploy environments: the Deployment filter offers "Live in X" / "Not in X yet" for each. */
+  environments?: string[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -76,6 +79,21 @@ export function TaskFilters({
         placeholder="Any milestone"
         options={[{ value: "none", label: "No milestone" }, ...milestones.map((m) => ({ value: m.ref, label: `${m.ref} · ${m.title}` }))]}
         className="w-44"
+      />
+      <Select
+        aria-label="Deployment"
+        value={sp.get("deploy") ?? ""}
+        onChange={(e) => set({ deploy: e.target.value || null })}
+        placeholder="Any deployment"
+        options={[
+          { value: "code", label: "Ships code" },
+          { value: "plain", label: "No deploy (plain tasks)" },
+          ...environments.flatMap((env) => [
+            { value: `live:${env}`, label: `Live in ${env}` },
+            { value: `not:${env}`, label: `Not in ${env} yet` },
+          ]),
+        ]}
+        className="w-48"
       />
       <Input
         placeholder="Assignee"

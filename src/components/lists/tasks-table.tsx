@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 
 import { withParams } from "@/lib/nav";
 import type { TaskSummary } from "@/lib/types";
+import { DeployBadges } from "@/components/board/board-card";
 import { PAGE_SIZE } from "./constants";
 
 type Col = { key: string; label: string; sort?: string; className?: string };
@@ -71,6 +72,8 @@ export function TasksTable({
   sort,
   order,
   statuses,
+  environments = [],
+  doneStatus,
 }: {
   items: TaskSummary[];
   total: number;
@@ -78,6 +81,8 @@ export function TasksTable({
   sort: string;
   order: "asc" | "desc";
   statuses: string[];
+  environments?: string[];
+  doneStatus?: string;
 }) {
   const sp = useSearchParams();
   const pathname = usePathname();
@@ -141,6 +146,7 @@ export function TasksTable({
                       {t.statusReason}
                     </div>
                   )}
+                  <DeployBadges task={t} environments={environments} doneStatus={doneStatus} className="mt-1" />
                 </td>
                 <td className="px-3 py-2">
                   <StatusChip status={t.status} statuses={statuses} size="xs" />

@@ -59,7 +59,7 @@ describe("MCP endpoint", () => {
     const expected = [
       "instructions", "space_create", "space_info", "task_create", "task_list", "task_view", "task_edit",
       "task_move", "task_archive", "task_restore", "task_delete", "draft_create", "draft_promote", "task_demote",
-      "task_comment", "search", "board", "milestone_create", "milestone_list", "milestone_edit", "doc_create",
+      "task_comment", "task_deploy", "task_rollback", "deployments", "search", "board", "milestone_create", "milestone_list", "milestone_edit", "doc_create",
       "doc_list", "doc_view", "doc_edit", "decision_create", "decision_list", "decision_view", "decision_edit",
       "activity", "statistics",
     ].sort();

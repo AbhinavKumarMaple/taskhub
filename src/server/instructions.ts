@@ -35,6 +35,11 @@ Taskhub is where work is tracked. You see only the Spaces whose key you pass as 
    then set the status to Done. When every sub-feature of a feature is Done or Cancelled, close the feature the
    same way. Screenshots are optional: attach one (REST \`POST /api/v1/tasks/{ref}/attachments\`) only when a
    picture explains something better than words.
+   **Deployments.** Done is not "live". Items that change code which gets deployed carry \`deployable: true\`
+   (writing, research and setup stay plain). Once a deploy has really gone out and you saw it succeed, record it
+   with \`task_deploy\` (environment Development or Production, every ref it shipped, the commit as \`version\`,
+   the live link as \`url\`). Use \`task_rollback\` if it is reverted. If the owner deploys, say the item still
+   needs a deploy and record it once they confirm.
 7. **Minor tweaks.** Create the item with status Done and a one-line summary, then archive it
    (\`task_archive\`), so it is recorded without cluttering the board.
 8. **Mention refs.** In every reply to the owner, name the refs you created or changed (e.g. "T-12, T-12.3").

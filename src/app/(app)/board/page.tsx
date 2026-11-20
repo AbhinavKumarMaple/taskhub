@@ -70,6 +70,7 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
         closedStatuses={settings.closedStatuses}
         reasonStatuses={settings.reasonStatuses}
         stoppedStatuses={settings.stoppedStatuses}
+        environments={settings.environments}
         milestones={milestones.map((m) => ({ ref: m.ref, title: m.title, spaceId: m.space.id }))}
         spaces={activeSpaces}
         space={space}

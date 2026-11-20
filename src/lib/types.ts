@@ -22,7 +22,8 @@ export type ActivityAction =
   | "promoted"
   | "demoted"
   | "moved"
-  | "attached";
+  | "attached"
+  | "deployed";
 
 /** `{ actor, spaces }` — every service call takes one. `spaces: 'all'` = owner. */
 export type Access = { actor: string; spaces: "all" | string[] };
@@ -44,8 +45,28 @@ export type Settings = {
   priorities: string[];
   labels: string[];
   dodDefaults: string[];
+  /** Where code ships, in order (e.g. Development, Production). */
+  environments: string[];
   updatedAt: Date;
 };
+
+/** A task's current deploy to one environment. `at` is an ISO timestamp. */
+export type DeploymentState = { version: string; url: string; note: string; actor: string; at: string };
+
+/** One deploy or roll-back in a task's deploy history. */
+export type DeploymentEvent = {
+  id: number;
+  environment: string;
+  action: "deployed" | "rolled_back";
+  version: string;
+  url: string;
+  note: string;
+  actor: string;
+  createdAt: Date;
+};
+
+/** A deploy-log row across tasks (GET /deployments). */
+export type DeploymentLogEntry = DeploymentEvent & { task: { ref: string; title: string; status: string }; space: SpaceRef };
 
 export type SpaceRef = { id: string; name: string; color: SpaceColor };
 
@@ -82,6 +103,10 @@ export type TaskSummary = {
   statusReason: string;
   /** When it entered this status. */
   statusChangedAt: Date;
+  /** Ships code: its deploys are tracked and "not deployed" shows until it is. */
+  deployable: boolean;
+  /** Environment → current deploy. Missing environment = not deployed there. */
+  deployments: Record<string, DeploymentState>;
   type: string;
   priority: string | null;
   labels: string[];
@@ -167,6 +192,8 @@ export type TaskFull = TaskSummary & {
   statusHistory: StatusEvent[];
   /** Screenshots, oldest first (metadata only; fetch `url` for the image). */
   attachments: Attachment[];
+  /** Oldest first: every deploy and roll-back, per environment. */
+  deployHistory: DeploymentEvent[];
   /** Newest first, up to 100. */
   activity: Activity[];
 };

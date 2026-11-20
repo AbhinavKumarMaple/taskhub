@@ -62,6 +62,7 @@ const SCALARS = [
   "references",
   "documentation",
   "modifiedFiles",
+  "deployable",
 ] as const;
 
 export function applyOptimistic(task: TaskFull, patch: UpdateTaskInput, ctx: OptimisticContext = {}): TaskFull {

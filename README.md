@@ -10,7 +10,7 @@ You, the owner, sign into the web app and see every Space.
 
 - Web app: board, lists, task sheet, ⌘K search, light and dark themes.
 - REST API under `/api/v1` (see [docs/API.md](docs/API.md)).
-- MCP server at `/api/mcp` (Streamable HTTP) with 30 tools for chats.
+- MCP server at `/api/mcp` (Streamable HTTP) with 33 tools for chats.
 - The full feature contract is [docs/SPEC.md](docs/SPEC.md).
 
 ## Run it locally

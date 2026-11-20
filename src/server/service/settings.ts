@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { getDb, type DbOrTx } from "../db";
-import { settings, statusEvents, tasks } from "../db/schema";
+import { deploymentEvents, settings, statusEvents, tasks } from "../db/schema";
 import { Conflict, Invalid } from "../errors";
 import { parse, updateSettingsInput, type UpdateSettingsInput } from "../validation";
 import { fieldList } from "@/lib/field-labels";
@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS = {
   priorities: ["High", "Medium", "Low"],
   labels: ["waiting"],
   dodDefaults: [] as string[],
+  environments: ["Development", "Production"],
 };
 
 function shape(row: typeof settings.$inferSelect): Settings {
@@ -34,6 +35,7 @@ function shape(row: typeof settings.$inferSelect): Settings {
     priorities: row.priorities,
     labels: row.labels,
     dodDefaults: row.dodDefaults,
+    environments: row.environments,
     updatedAt: row.updatedAt,
   };
 }
@@ -83,7 +85,39 @@ export async function updateSettings(access: Access, input: UpdateSettingsInput)
       doneStatus: p.doneStatus ?? cur.doneStatus,
       closedStatuses: p.closedStatuses ?? cur.closedStatuses,
       reasonStatuses: p.reasonStatuses ?? cur.reasonStatuses,
+      environments: p.environments ?? cur.environments,
     };
+
+    // Environments: renames move the current deploys and the history; removing one still deployed is refused.
+    {
+      const lower = next.environments.map((e) => e.toLowerCase());
+      const dup = next.environments.find((_, i) => lower.indexOf(lower[i]) !== i);
+      if (dup) throw new Invalid(`environments: "${dup}" is listed twice (names are matched without case)`);
+      const oldEnvs = [...cur.environments];
+      for (const r of p.renames?.environments ?? []) {
+        if (r.from === r.to) continue;
+        if (!oldEnvs.includes(r.from)) throw new Invalid(`environments: "${r.from}" does not exist`);
+        if (oldEnvs.includes(r.to))
+          throw new Conflict(`environments: cannot rename "${r.from}" to "${r.to}": "${r.to}" already exists (its deploys would be overwritten)`);
+        if (!next.environments.includes(r.to)) throw new Invalid(`environments: rename target "${r.to}" must be in the new list`);
+        await tx
+          .update(tasks)
+          .set({
+            deployments: sql`(${tasks.deployments} - ${r.from}::text) || jsonb_build_object(${r.to}::text, ${tasks.deployments} -> ${r.from}::text)`,
+          })
+          .where(sql`(${tasks.deployments} -> ${r.from}::text) is not null`);
+        await tx.update(deploymentEvents).set({ environment: r.to }).where(eq(deploymentEvents.environment, r.from));
+        oldEnvs[oldEnvs.indexOf(r.from)] = r.to;
+      }
+      for (const v of oldEnvs.filter((e) => !next.environments.includes(e))) {
+        const [{ n }] = await tx
+          .select({ n: sql<number>`count(*)::int` })
+          .from(tasks)
+          .where(sql`(${tasks.deployments} -> ${v}::text) is not null`);
+        if (n > 0)
+          throw new Conflict(`Cannot remove environment "${v}": ${n} task${n === 1 ? " is" : "s are"} deployed there`);
+      }
+    }
 
     for (const key of ["statuses", "types", "priorities", "labels"] as ListKey[]) {
       const renames = p.renames?.[key] ?? [];

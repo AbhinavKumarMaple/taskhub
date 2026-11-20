@@ -88,6 +88,8 @@ export const createTaskInput = z.object({
   definitionOfDone: strList.optional(),
   noDodDefaults: z.boolean().optional(),
   dependsOn: z.array(taskRef).max(100).optional(),
+  /** Ships code: track its deploys per environment. */
+  deployable: z.boolean().optional(),
 });
 export type CreateTaskInput = z.input<typeof createTaskInput>;
 
@@ -142,6 +144,8 @@ export const updateTaskInput = z.object({
   removeLabels: tagList.optional(),
   addDeps: z.array(taskRef).max(100).optional(),
   removeDeps: z.array(taskRef).max(100).optional(),
+  /** Ships code: track its deploys per environment. */
+  deployable: z.boolean().optional(),
 });
 export type UpdateTaskInput = z.input<typeof updateTaskInput>;
 
@@ -174,6 +178,12 @@ export const listTasksInput = z
     /** Children of this task ref. */
     parent: taskRef.optional(),
     topLevelOnly: bool.optional(),
+    /** true: only tasks that ship code; false: only plain tasks. */
+    deployable: bool.optional(),
+    /** Deployed to all of these environments. */
+    deployedTo: stringOrList.optional(),
+    /** Ships code but is not (yet) deployed to this environment. */
+    notDeployedTo: z.string().trim().min(1).max(100).optional(),
     q: z.string().trim().max(500).optional(),
     includeArchived: bool.optional(),
     archivedOnly: bool.optional(),
@@ -207,6 +217,40 @@ export const reorderTasksInput = z.object({
   reason: z.string().trim().max(5000).optional(),
   refs: z.array(taskRef).min(1).max(1000),
 });
+
+// ── Deployments ──────────────────────────────────────────────────────────────
+const deployFields = {
+  environment: shortText,
+  /** Commit, tag or build id. */
+  version: z.string().trim().max(200).optional(),
+  /** Deploy or preview link (http/https). */
+  url: z
+    .string()
+    .trim()
+    .max(2000)
+    .refine((u) => u === "" || /^https?:\/\/\S+$/i.test(u), "must be an http(s) link")
+    .optional(),
+  note: z.string().trim().max(2000).optional(),
+};
+export const recordDeploymentInput = z.object({
+  /** Tasks this deploy shipped (one push often ships several). */
+  refs: z.array(taskRef).min(1).max(200),
+  /** Also mark every non-archived descendant of these refs (a whole feature). */
+  includeChildren: z.boolean().optional(),
+  ...deployFields,
+});
+export type RecordDeploymentInput = z.input<typeof recordDeploymentInput>;
+export const rollbackDeploymentInput = z.object({
+  environment: shortText,
+  note: z.string().trim().max(2000).optional(),
+});
+export const listDeploymentsInput = z
+  .object({
+    spaces: stringOrList.optional(),
+    environment: z.string().trim().min(1).max(100).optional(),
+    limit: int(1, 500).optional(),
+  })
+  .default({});
 
 export const cleanupDoneInput = z.object({
   olderThanDays: int(0, 3650),
@@ -309,6 +353,8 @@ export const updateSettingsInput = z.object({
   priorities: configList.optional(),
   labels: configList.optional(),
   dodDefaults: z.array(z.string().trim().min(1).max(500)).max(50).optional(),
+  /** Where code ships, in order (e.g. Development, Staging, Production). */
+  environments: configList.max(10).optional(),
   /** Explicit renames; existing tasks are migrated. Applied before removals are checked. */
   renames: z
     .object({
@@ -316,6 +362,7 @@ export const updateSettingsInput = z.object({
       types: renames.optional(),
       priorities: renames.optional(),
       labels: renames.optional(),
+      environments: renames.optional(),
     })
     .optional(),
 });

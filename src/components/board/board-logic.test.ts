@@ -28,6 +28,8 @@ function task(ref: string, status: string, ordinal: number, milestone: string | 
     title: ref,
     status,
     statusReason: "",
+    deployable: false,
+    deployments: {},
     statusChangedAt: new Date(0),
     type: "feature",
     priority: null,

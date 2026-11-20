@@ -7,6 +7,7 @@ import type {
   ChecklistItem,
   DecisionFull,
   DecisionSummary,
+  DeploymentLogEntry,
   DepNode,
   DocumentFull,
   DocumentSummary,
@@ -30,9 +31,17 @@ export function taskLine(t: TaskSummary): string {
     t.milestone ? `${t.milestone.ref}` : "",
     t.isDraft ? "draft" : "",
     t.archivedAt ? "archived" : "",
+    deployText(t),
   ].filter(Boolean);
   const why = t.statusReason && t.status !== "Done" ? ` — ${t.statusReason}` : "";
   return `${t.ref} [${t.status}${why}] ${t.title} (${bits.join(", ")})${extra.length ? " · " + extra.join(" · ") : ""}`;
+}
+
+/** "deployed: Development, Production" / "not deployed" / "" for plain tasks. */
+function deployText(t: TaskSummary): string {
+  const envs = Object.keys(t.deployments ?? {});
+  if (envs.length) return `deployed: ${envs.join(", ")}`;
+  return t.deployable ? "not deployed" : "";
 }
 
 function checklist(title: string, items: ChecklistItem[]): string[] {
@@ -99,6 +108,15 @@ export function taskDetail(t: TaskFull): string {
           ...t.attachments.map((a) => `  #${a.id} ${a.filename}${a.caption ? ` — ${a.caption}` : ""} (GET ${a.url})`),
         ]
       : []),
+    ...(t.deployable || t.deployHistory.length
+      ? [
+          `Deployments: ${Object.entries(t.deployments).map(([e, d]) => `${e}${d.version ? ` ${d.version}` : ""} (${iso(d.at)})`).join(", ") || "not deployed yet"}`,
+          ...t.deployHistory.map(
+            (e) =>
+              `  ${new Date(e.createdAt).toISOString().slice(0, 16).replace("T", " ")} ${e.action === "deployed" ? "deployed to" : "rolled back from"} ${e.environment}${e.version ? ` ${e.version}` : ""} by ${e.actor}${e.note ? `: ${e.note}` : ""}${e.url ? ` <${e.url}>` : ""}`,
+          ),
+        ]
+      : []),
     ...(t.statusHistory.length > 1
       ? [
           "Status history:",
@@ -132,6 +150,7 @@ export function spaceInfoText(spaces: SpaceWithCounts[], settings: Settings): st
     `Types: ${settings.types.join(", ")}`,
     `Priorities: ${settings.priorities.join(", ") || "none"}`,
     `Labels: ${settings.labels.join(", ") || "none"}`,
+    `Environments: ${settings.environments.join(", ") || "none"}`,
     settings.dodDefaults.length ? `Definition of Done defaults: ${settings.dodDefaults.join("; ")}` : "",
   ]
     .filter(Boolean)
@@ -204,5 +223,15 @@ export function statisticsText(s: Statistics): string {
     s.oldestOpen.length ? `Oldest open:\n${s.oldestOpen.map((t) => `  ${taskLine(t)}`).join("\n")}` : "",
   ]
     .filter(Boolean)
+    .join("\n");
+}
+
+export function deploymentLogText(items: DeploymentLogEntry[]): string {
+  if (!items.length) return "No deploys recorded.";
+  return items
+    .map(
+      (e) =>
+        `${new Date(e.createdAt).toISOString().slice(0, 16).replace("T", " ")} ${e.task.ref} ${e.action === "deployed" ? "→" : "⟲"} ${e.environment}${e.version ? ` ${e.version}` : ""} by ${e.actor} · ${e.task.title}${e.note ? ` — ${e.note}` : ""}`,
+    )
     .join("\n");
 }

@@ -15,7 +15,7 @@ import { useUnsavedWarning } from "./editable";
 import { isDirty, moveRow, newRow, planList, rowsFrom, type ListRow } from "./settings-model";
 import { useActionRunner } from "./use-action";
 
-type ListKey = "statuses" | "types" | "priorities" | "labels" | "dodDefaults";
+type ListKey = "statuses" | "types" | "priorities" | "labels" | "environments" | "dodDefaults";
 
 const SECTIONS: {
   key: ListKey;
@@ -58,6 +58,15 @@ const SECTIONS: {
     title: "Labels",
     description: "Suggested labels. “waiting” is shown in amber and listed on Statistics.",
     addPlaceholder: "Add a label",
+    allowEmpty: true,
+    renames: true,
+    maxLength: 100,
+  },
+  {
+    key: "environments",
+    title: "Environments",
+    description: "Where code ships, in order. Tasks that ship code show a badge per environment once deployed there. Removing one that tasks are deployed to is refused.",
+    addPlaceholder: "Add an environment, e.g. Staging",
     allowEmpty: true,
     renames: true,
     maxLength: 100,

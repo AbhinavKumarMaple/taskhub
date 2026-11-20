@@ -17,6 +17,16 @@ export const metadata: Metadata = { title: "All tasks" };
 
 type Sort = (typeof TASK_SORTS)[number];
 
+/** ?deploy=code | plain | live:<env> | not:<env> → list filters. */
+function deployFilter(v: string | undefined): { deployable?: boolean; deployedTo?: string[]; notDeployedTo?: string } {
+  if (!v) return {};
+  if (v === "code") return { deployable: true };
+  if (v === "plain") return { deployable: false };
+  if (v.startsWith("live:") && v.length > 5) return { deployedTo: [v.slice(5)] };
+  if (v.startsWith("not:") && v.length > 4) return { notDeployedTo: v.slice(4) };
+  return {};
+}
+
 export default async function AllTasksPage({ searchParams }: PageProps<"/tasks">) {
   const sp = await searchParams;
   const access = await requireOwner();
@@ -37,8 +47,9 @@ export default async function AllTasksPage({ searchParams }: PageProps<"/tasks">
     labels: paramList(sp, "label"),
     assignee: param(sp, "assignee"),
     milestone: param(sp, "milestone"),
+    ...deployFilter(param(sp, "deploy")),
   };
-  const hasFilters = Object.values(filters).some((v) => (Array.isArray(v) ? v.length > 0 : !!v));
+  const hasFilters = Object.values(filters).some((v) => (Array.isArray(v) ? v.length > 0 : typeof v === "boolean" || !!v));
 
   const [settings, milestones, list] = await Promise.all([
     svc.getSettings(access),
@@ -82,6 +93,7 @@ export default async function AllTasksPage({ searchParams }: PageProps<"/tasks">
         priorities={settings.priorities}
         labels={settings.labels}
         milestones={milestones.map((m) => ({ ref: m.ref, title: m.title }))}
+        environments={settings.environments}
       />
       {list.error ? (
         <EmptyState icon={<ListChecks />} title="These filters could not be applied" description={list.error} />
@@ -103,6 +115,8 @@ export default async function AllTasksPage({ searchParams }: PageProps<"/tasks">
           sort={sort}
           order={order}
           statuses={settings.statuses}
+          environments={settings.environments}
+          doneStatus={settings.doneStatus}
         />
       )}
       <TaskSheetSlot taskRef={param(sp, "task")} />

@@ -46,8 +46,16 @@ export const settings = pgTable("settings", {
   priorities: textArray("priorities"),
   labels: textArray("labels"),
   dodDefaults: textArray("dod_defaults"),
+  /** Where code ships, in order (e.g. Development, Production). Deploys are recorded per environment. */
+  environments: text("environments")
+    .array()
+    .notNull()
+    .default(sql`'{Development,Production}'::text[]`),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
+
+/** Current deploy of a task to one environment (latest wins). */
+export type DeploymentState = { version: string; url: string; note: string; actor: string; at: string };
 
 export const SPACE_COLORS = ["gray", "blue", "green", "amber", "red", "purple", "pink", "teal"] as const;
 
@@ -108,6 +116,10 @@ export const tasks = pgTable(
     /** Why it is in its current status (required for reason statuses, cleared on leaving them). */
     statusReason: text("status_reason").notNull().default(""),
     statusChangedAt: ts("status_changed_at").notNull().defaultNow(),
+    /** Ships code, so its deploys are tracked ("not deployed" shows until it is). Plain tasks stay false. */
+    deployable: boolean("deployable").notNull().default(false),
+    /** Environment name → its current deploy. Absent key = not deployed there. */
+    deployments: jsonb("deployments").$type<Record<string, DeploymentState>>().notNull().default({}),
     ordinal: doublePrecision("ordinal").notNull().default(0),
     childCounter: integer("child_counter").notNull().default(0),
     createdAt: ts("created_at").notNull().defaultNow(),
@@ -181,6 +193,33 @@ export const statusEvents = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [index("status_events_task_idx").on(t.taskId, t.id)],
+);
+
+export const DEPLOY_ACTIONS = ["deployed", "rolled_back"] as const;
+
+/** One row per deploy or roll-back of a task to an environment: the task's deploy history. */
+export const deploymentEvents = pgTable(
+  "deployment_events",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    spaceId: text("space_id").notNull(),
+    environment: text("environment").notNull(),
+    action: text("action", { enum: DEPLOY_ACTIONS }).notNull(),
+    /** Commit, tag or build id. */
+    version: text("version").notNull().default(""),
+    /** Deploy or preview link. */
+    url: text("url").notNull().default(""),
+    note: text("note").notNull().default(""),
+    actor: text("actor").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("deployment_events_task_idx").on(t.taskId, t.id),
+    index("deployment_events_space_idx").on(t.spaceId, t.id),
+  ],
 );
 
 const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
@@ -261,6 +300,7 @@ export const ACTIVITY_ACTIONS = [
   "demoted",
   "moved",
   "attached",
+  "deployed",
 ] as const;
 
 export type FieldChanges = Record<string, { from: unknown; to: unknown }>;

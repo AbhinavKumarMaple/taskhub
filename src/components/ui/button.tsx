@@ -63,6 +63,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={buttonClass(variant === "primary" && disabled && !loading ? "primary-off" : variant, size, className)}
+      {...(rest.autoFocus ? { "data-autofocus": "" } : {})}
       {...rest}
     >
       {loading ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : icon}

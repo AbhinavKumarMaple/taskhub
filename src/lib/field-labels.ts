@@ -17,10 +17,12 @@ export const FIELD_LABELS: Record<string, string> = {
   closedStatuses: "finished statuses",
   reasonStatuses: "statuses that need a reason",
   attachments: "screenshots",
+  deployable: "ships code",
 };
 
-/** `finalSummary` → "final summary"; known keys use FIELD_LABELS. */
+/** `finalSummary` → "final summary"; `deployments.Production` → "Production deploy"; known keys use FIELD_LABELS. */
 export function fieldLabel(key: string): string {
+  if (key.startsWith("deployments.")) return `${key.slice("deployments.".length)} deploy`;
   return FIELD_LABELS[key] ?? key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
 }
 

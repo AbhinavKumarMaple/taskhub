@@ -6,6 +6,7 @@ import {
   attachments,
   checklistItems,
   comments,
+  deploymentEvents,
   milestones,
   spaces,
   statusEvents,
@@ -36,6 +37,7 @@ import type {
   Attachment,
   ChecklistItem,
   Comment,
+  DeploymentEvent,
   DepNode,
   Settings,
   StatusEvent,
@@ -151,6 +153,8 @@ async function summarize(q: DbOrTx, rows: SummaryRow[], settings: Settings): Pro
       status: t.status,
       statusReason: t.statusReason,
       statusChangedAt: t.statusChangedAt,
+      deployable: t.deployable,
+      deployments: t.deployments ?? {},
       type: t.type,
       priority: t.priority,
       labels: t.labels,
@@ -205,6 +209,12 @@ function listWhere(access: Access, p: ReturnType<typeof listTasksInput.parse>): 
   }
   if (p.parent) conds.push(eq(parentT.ref, p.parent));
   if (p.topLevelOnly) conds.push(isNull(tasks.parentId));
+  if (p.deployable !== undefined) conds.push(eq(tasks.deployable, p.deployable));
+  // Environment names match without case, like deploys and roll-backs do.
+  const hasEnv = (env: string) =>
+    sql`exists (select 1 from jsonb_object_keys(${tasks.deployments}) k where lower(k) = lower(${env.trim()}::text))`;
+  for (const env of p.deployedTo ?? []) conds.push(hasEnv(env));
+  if (p.notDeployedTo) conds.push(and(eq(tasks.deployable, true), sql`not ${hasEnv(p.notDeployedTo)}`));
   conds.push(allWordsMatch(p.q, [tasks.ref, tasks.title, tasks.description, tasks.notes]));
   conds.push(archivedFilter(tasks.archivedAt, p));
   const drafts = p.drafts ?? "exclude";
@@ -363,7 +373,7 @@ async function directDepRefs(q: DbOrTx, taskId: number): Promise<string[]> {
 async function loadFull(q: DbOrTx, access: Access, ref: string): Promise<TaskFull> {
   const t = await loadTask(q, access, ref);
   const settings = await loadSettings(q);
-  const [[summary], checks, childRows, parentRow, edges, commentRows, activityRows, trailRows, fileRows] = await Promise.all([
+  const [[summary], checks, childRows, parentRow, edges, commentRows, activityRows, trailRows, fileRows, deployRows] = await Promise.all([
     summariesByIds(q, [t.id], settings),
     q.select().from(checklistItems).where(eq(checklistItems.taskId, t.id)).orderBy(asc(checklistItems.position), asc(checklistItems.id)),
     baseSelect(q).where(eq(tasks.parentId, t.id)).orderBy(refSortKey),
@@ -395,6 +405,17 @@ async function loadFull(q: DbOrTx, access: Access, ref: string): Promise<TaskFul
       )
       .orderBy(asc(statusEvents.id)),
     q.select(attachmentMetaCols).from(attachments).where(eq(attachments.taskId, t.id)).orderBy(asc(attachments.id)),
+    // Same Space rule as the trail.
+    q
+      .select()
+      .from(deploymentEvents)
+      .where(
+        and(
+          eq(deploymentEvents.taskId, t.id),
+          access.spaces === "all" ? undefined : inArray(deploymentEvents.spaceId, access.spaces),
+        ),
+      )
+      .orderBy(asc(deploymentEvents.id)),
   ]);
   const involved = new Set<number>();
   for (const e of edges) {
@@ -433,6 +454,7 @@ async function loadFull(q: DbOrTx, access: Access, ref: string): Promise<TaskFul
       (e): StatusEvent => ({ id: e.id, from: e.fromStatus, to: e.toStatus, reason: e.reason, actor: e.actor, createdAt: e.createdAt }),
     ),
     attachments: fileRows.map((a) => toAttachment(t.ref, a)),
+    deployHistory: deployRows.map(toDeploymentEvent),
     activity: activityRows as Activity[],
   };
 }
@@ -452,6 +474,19 @@ export const attachmentMetaCols = {
 
 export function toAttachment(ref: string, a: Omit<Attachment, "url">): Attachment {
   return { ...a, url: `/api/v1/tasks/${ref}/attachments/${a.id}` };
+}
+
+export function toDeploymentEvent(e: typeof deploymentEvents.$inferSelect): DeploymentEvent {
+  return {
+    id: e.id,
+    environment: e.environment,
+    action: e.action,
+    version: e.version,
+    url: e.url,
+    note: e.note,
+    actor: e.actor,
+    createdAt: e.createdAt,
+  };
 }
 
 /** Full task: checklists, children, deps both ways (transitive), comments, activity. */
@@ -668,6 +703,7 @@ export async function createTask(access: Access, input: CreateTaskInput): Promis
         references: p.references ?? [],
         documentation: p.documentation ?? [],
         modifiedFiles: p.modifiedFiles ?? [],
+        deployable: p.deployable ?? false,
         ordinal: await endOfColumn(tx, spaceId, status),
       })
       .returning();
@@ -686,6 +722,7 @@ export async function createTask(access: Access, input: CreateTaskInput): Promis
     if (row.priority) changes.priority = { from: null, to: row.priority };
     if (row.labels.length) changes.labels = { from: null, to: row.labels };
     if (row.statusReason) changes.statusReason = { from: null, to: row.statusReason };
+    if (row.deployable) changes.deployable = { from: null, to: true };
     await logActivity(tx, access, {
       spaceId,
       entityType: "task",
@@ -715,6 +752,7 @@ const SCALARS = [
   "references",
   "documentation",
   "modifiedFiles",
+  "deployable",
 ] as const;
 
 /** Update any field and/or apply list ops (AC, DoD, labels, deps, notes/plan appends). */
@@ -1250,7 +1288,9 @@ export async function exportBoardMarkdown(access: Access, filters: ListTasksInpu
     const kids = t.childTotal ? ` · ${t.childDone}/${t.childTotal} sub-tasks done` : "";
     const box = t.status === settings.doneStatus ? "x" : settings.closedStatuses.includes(t.status) ? "-" : " ";
     const why = settings.reasonStatuses.includes(t.status) && t.statusReason ? ` · ${t.status}: ${t.statusReason}` : "";
-    return `${indent}- [${box}] **${t.ref}** ${t.title} (${bits.join(", ")})${progress}${kids}${why}`;
+    const live = settings.environments.filter((e) => t.deployments[e]);
+    const deploy = t.deployable ? ` · ${live.length ? `Deployed: ${live.join(", ")}` : "Not deployed"}` : "";
+    return `${indent}- [${box}] **${t.ref}** ${t.title} (${bits.join(", ")})${progress}${kids}${why}${deploy}`;
   };
   const out: string[] = [`# Board`, "", `_Exported ${new Date().toISOString().slice(0, 10)}_`, ""];
   for (const status of settings.statuses) {

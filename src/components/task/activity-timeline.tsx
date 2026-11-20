@@ -10,6 +10,7 @@ import {
   MoveRight,
   Plus,
   RotateCcw,
+  Rocket,
   Trash2,
   ArrowUpFromLine,
   ArrowDownToLine,
@@ -34,6 +35,7 @@ const ICONS: Record<ActivityAction, LucideIcon> = {
   demoted: ArrowDownToLine,
   moved: MoveRight,
   attached: ImagePlus,
+  deployed: Rocket,
 };
 
 

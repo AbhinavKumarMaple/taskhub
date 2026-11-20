@@ -82,6 +82,8 @@ export type BoardViewProps = {
   reasonStatuses: string[];
   /** Open-but-stopped statuses (Blocked): shown in red, counted on parent cards. */
   stoppedStatuses: string[];
+  /** Deploy environments in order (badges on cards that ship code). */
+  environments?: string[];
   milestones: { ref: string; title: string; spaceId: string }[];
   spaces: SpaceRef[];
   /** Selected Space id, or undefined for All Spaces. */
@@ -144,9 +146,12 @@ function useCollapsed(defaults: string[]) {
   return { isCollapsed, toggle };
 }
 
+const EMPTY: string[] = [];
+
 export function BoardView(props: BoardViewProps) {
   const { tasks, error, statuses, doneStatus, closedStatuses, reasonStatuses, stoppedStatuses, milestones, spaces, space, grouped, filters, version } =
     props;
+  const environments = props.environments ?? EMPTY;
   const roles = useMemo(() => ({ doneStatus, closedStatuses, stoppedStatuses }), [doneStatus, closedStatuses, stoppedStatuses]);
   const { isCollapsed, toggle: toggleCollapsed } = useCollapsed(closedStatuses.filter((st) => st !== doneStatus));
   const [reasonReq, setReasonReq] = useState<(ReasonRequest & { end: Placement; start: Placement | null }) | null>(null);
@@ -456,6 +461,8 @@ export function BoardView(props: BoardViewProps) {
                               showMilestone={!grouped}
                               reasonStatuses={reasonStatuses}
                               stoppedStatuses={stoppedStatuses}
+                              environments={environments}
+                              doneStatus={doneStatus}
                               col={li * n + si}
                               index={i}
                               selected={selected === ref}
@@ -492,6 +499,8 @@ export function BoardView(props: BoardViewProps) {
                 showMilestone={!grouped}
                 reasonStatuses={reasonStatuses}
                 stoppedStatuses={stoppedStatuses}
+                environments={environments}
+                doneStatus={doneStatus}
               />
             </div>
           ) : null}

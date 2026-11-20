@@ -41,6 +41,7 @@ import type { TaskFull } from "@/lib/types";
 import type { UpdateTaskInput } from "@/server/validation";
 import { ActivityTimeline } from "./activity-timeline";
 import { Attachments } from "./attachments";
+import { Deployments } from "./deployments";
 import { StatusReasonDialog, type ReasonRequest } from "./status-reason-dialog";
 import { StatusTrail } from "./status-trail";
 import { StatusReason } from "@/components/board/board-card";
@@ -518,6 +519,17 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
   const activity = <ActivityTimeline items={task.activity} />;
   const trail = <StatusTrail events={task.statusHistory} settings={settings} />;
   const screenshots = <Attachments taskRef={ref} items={task.attachments} onChanged={reload} />;
+  const deployment = (
+    <Deployments
+      taskRef={ref}
+      deployable={task.deployable}
+      current={task.deployments}
+      history={task.deployHistory}
+      environments={settings.environments}
+      onDeployable={(v) => void save({ deployable: v })}
+      onChanged={reload}
+    />
+  );
 
   const dates = (
     <p className="text-xs text-fg-subtle">
@@ -577,6 +589,7 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
         {checklists}
         {subtasks}
         {dependencies}
+        {deployment}
         {screenshots}
         {writeups}
         {lists}
@@ -601,6 +614,7 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <aside className="flex min-w-0 flex-col gap-6 lg:order-last lg:border-l lg:border-border lg:pl-6">
           <Section title="Properties">{properties}</Section>
+          {deployment}
           {trail}
           {lists}
           {dates}

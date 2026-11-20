@@ -114,8 +114,8 @@ cleanup) and `reason_statuses` (Blocked, Cancelled).
 - Moving into a reason status needs `reason` (400 without one): `PATCH /tasks/{ref} {"status":"Blocked","reason":"…"}`.
   The same works on `POST /tasks`, `POST /tasks/move` and `POST /tasks/reorder`.
 - `{"reason":"…"}` alone updates the current reason. Leaving the status replaces it (an optional reason is kept).
-- Every task carries `status_reason` and `status_changed_at`; `GET /tasks/{ref}` adds `status_history`, and
-  `GET /tasks/{ref}/history` returns just the trail: `[{id, from, to, reason, actor, created_at}]`, oldest first.
+- Every task carries `status_reason` and `status_changed_at`; `GET /tasks/{ref}` adds `statusHistory`, and
+  `GET /tasks/{ref}/history` returns just the trail: `[{id, from, to, reason, actor, createdAt}]`, oldest first.
 - Blocked work: `GET /tasks?status=Blocked`.
 
 ### Screenshots (attachments)
@@ -128,6 +128,24 @@ the task's Space.
   image body with `?caption=&filename=` → 201 `{id, filename, content_type, size, width, height, caption, url}`
 - `GET /tasks/{ref}/attachments` → metadata list · `GET /tasks/{ref}/attachments/{id}` → the image (`?download=1`)
 - `PATCH /tasks/{ref}/attachments/{id}` `{caption}` · `DELETE /tasks/{ref}/attachments/{id}`
+
+### Deployments
+
+Done means finished; deployments say where it is live. Settings hold the environments (`environments`, default
+Development, Production; renames move existing deploys, removing one still in use is a 409).
+
+- A task that ships code carries `deployable: true` (set it on create or `PATCH`; recording a deploy sets it too).
+  Plain tasks stay `false` and show no deploy state.
+- `deployments` on every task: `{"Production": {version, url, note, actor, at}, …}`, one entry per environment it is
+  live in. A missing environment means not deployed there.
+- `POST /deployments` `{environment, refs, version?, url?, note?, include_children?}` records one deploy that shipped
+  several tasks (→ 201, their summaries). `include_children` also marks every non-archived descendant.
+  `POST /tasks/{ref}/deploy` `{environment, version?, url?, note?}` does the same for one task.
+- `POST /tasks/{ref}/rollback` `{environment, note?}` takes the deploy off (400 if it is not deployed there).
+- `GET /tasks/{ref}/deployments` → `{deployable, current, history}`; `GET /tasks/{ref}` has `deployHistory`.
+- `GET /deployments?environment=&space=&limit=` the deploy log across your Spaces, newest first.
+- List filters: `deployable=true|false`, `deployed_to=<env>` (all of several), `not_deployed_to=<env>` (deployable
+  but not there yet), e.g. `GET /tasks?status=Done&not_deployed_to=Production`.
 
 ### Milestones, documents, decisions
 
@@ -158,7 +176,7 @@ Fields for each kind:
 | GET | `/board.md` | The board as markdown (`text/markdown`). Takes the same filters as `GET /tasks` |
 | GET | `/version` | `space`. Returns `{version}`, a cheap marker that changes on every write the caller can see. Poll it every 5 s and refetch only when it changes |
 | GET | `/settings` | Statuses (the last one counts as done), types, priorities, labels, DoD defaults |
-| PATCH | `/settings` | Owner only. `{statuses?, defaultStatus?, types?, priorities?, labels?, dodDefaults?, renames?}` |
+| PATCH | `/settings` | Owner only. `{statuses?, defaultStatus?, doneStatus?, closedStatuses?, reasonStatuses?, types?, priorities?, labels?, dodDefaults?, environments?, renames?}` |
 | GET | `/instructions` | The tracking rules (markdown) |
 
 ### Example
@@ -193,7 +211,7 @@ How the endpoint behaves:
 | `instructions` | The tracking rules |
 | `space_create` | `name, description?, color?` → the Space and its key |
 | `space_info` | Your Spaces (with counts) plus statuses, types, priorities and labels |
-| `task_create` | `title`, `type`, `parent`, `status`, `priority`, `labels`, `assignees`, `milestone`, `due_date`, `description`, `plan`, `notes`, `final_summary`, `references`, `documentation`, `modified_files`, `acceptance_criteria`, `definition_of_done`, `no_dod_defaults`, `depends_on`, `space_id` |
+| `task_create` | `title`, `type`, `parent`, `status`, `priority`, `labels`, `assignees`, `milestone`, `due_date`, `description`, `plan`, `notes`, `final_summary`, `references`, `documentation`, `modified_files`, `acceptance_criteria`, `definition_of_done`, `no_dod_defaults`, `depends_on`, `deployable`, `space_id` |
 | `draft_create` | Same as `task_create`, but makes a draft |
 | `task_list` | The REST list filters, in snake_case. `space_id` filters by Space |
 | `task_view` | `ref`: the task as text, with numbered checklists |
@@ -202,6 +220,9 @@ How the endpoint behaves:
 | `task_archive` / `task_restore` / `task_delete` | `ref` |
 | `draft_promote` / `task_demote` | `ref` |
 | `task_comment` | `ref, body` |
+| `task_deploy` | `refs, environment, version?, url?, note?, include_children?` |
+| `task_rollback` | `ref, environment, note?` |
+| `deployments` | The deploy log: `space_id?, environment?, limit?` |
 | `search` | `q, types?, space_id?, include_archived?, limit?` |
 | `board` | Columns of cards. `type: "feature"` gives the main board. Also takes `space_id`, `labels`, `priority`, `assignee`, `milestone`, `q` |
 | `milestone_create` / `milestone_list` / `milestone_edit` | Edit takes `archived: true/false` to archive or restore |

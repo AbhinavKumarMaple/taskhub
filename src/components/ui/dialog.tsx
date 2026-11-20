@@ -18,7 +18,13 @@ export function useNativeDialog(open: boolean, onClose: () => void) {
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
+    if (open && !d.open) {
+      d.showModal();
+      // showModal() focuses the first focusable element (the close button), which undoes React's autoFocus
+      // (the field mounted while the dialog was still hidden). Input/Textarea/Button with autoFocus carry
+      // data-autofocus, so the intended field gets the focus.
+      d.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    }
     if (!open && d.open) d.close();
   }, [open]);
   useEffect(() => {
@@ -135,10 +141,11 @@ export function ConfirmDialog({
       size="sm"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={pending}>
+          {/* A destructive confirm starts on Cancel, so Enter never deletes by accident. */}
+          <Button variant="secondary" onClick={onClose} disabled={pending} autoFocus={danger}>
             {cancelLabel}
           </Button>
-          <Button variant={danger ? "danger" : "primary"} onClick={() => void onConfirm()} loading={pending} autoFocus>
+          <Button variant={danger ? "danger" : "primary"} onClick={() => void onConfirm()} loading={pending} autoFocus={!danger}>
             {confirmLabel}
           </Button>
         </>

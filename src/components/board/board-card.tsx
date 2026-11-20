@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Ban, CalendarDays, Flag, GitBranch, OctagonPause } from "lucide-react";
+import { Ban, CalendarDays, CircleDashed, Flag, GitBranch, OctagonPause, Rocket } from "lucide-react";
 import { memo, type KeyboardEvent, type Ref } from "react";
 import { LabelChip, PriorityMarker, SpaceChip, TypeChip } from "@/components/ui/chip";
 import { ProgressRing } from "@/components/ui/misc";
@@ -18,10 +18,22 @@ type CardBodyProps = {
   reasonStatuses?: string[];
   /** Open-but-stopped statuses (Blocked): red reason, counted among children. */
   stoppedStatuses?: string[];
+  /** Deploy environments in order (Development, Production): badges on cards that ship code. */
+  environments?: string[];
+  /** The completed status: a finished card that ships code but is not live says "Not deployed". */
+  doneStatus?: string;
 };
 
 /** What a card shows. Used by the sortable card and by the drag overlay. */
-export function CardBody({ task: t, showSpace, showMilestone, reasonStatuses = [], stoppedStatuses = [] }: CardBodyProps) {
+export function CardBody({
+  task: t,
+  showSpace,
+  showMilestone,
+  reasonStatuses = [],
+  stoppedStatuses = [],
+  environments = [],
+  doneStatus,
+}: CardBodyProps) {
   const due = formatDue(t.dueDate);
   const showChildren = t.childTotal > 0;
   const stopped = stoppedStatuses.includes(t.status);
@@ -59,6 +71,8 @@ export function CardBody({ task: t, showSpace, showMilestone, reasonStatuses = [
           )}
         </div>
       )}
+
+      <DeployBadges task={t} environments={environments} doneStatus={doneStatus} className="mt-2" />
 
       {showChildren && (
         <div className="mt-2 flex items-center gap-2" title={`${t.childDone} of ${t.childTotal} sub-tasks finished${childStopped ? `, ${childStopped} blocked` : ""}`}>
@@ -146,6 +160,68 @@ export function StatusReason({
   );
 }
 
+/**
+ * Where a task that ships code is live: one badge per environment, green when deployed there.
+ * Nothing for plain tasks; for code not deployed anywhere, only once it is Done ("Not deployed").
+ */
+export function DeployBadges({
+  task: t,
+  environments,
+  doneStatus,
+  className,
+}: {
+  task: Pick<TaskSummary, "deployable" | "deployments" | "status">;
+  environments: string[];
+  doneStatus?: string;
+  className?: string;
+}) {
+  const live = Object.keys(t.deployments ?? {});
+  if (!t.deployable && !live.length) return null;
+  // Configured order first, then anything recorded under an environment no longer configured.
+  const envs = [...environments, ...live.filter((e) => !environments.includes(e))];
+  if (!live.length) {
+    if (t.status !== doneStatus) return null;
+    return (
+      <div className={cn("flex", className)}>
+        <span
+          className="inline-flex h-[18px] items-center gap-1 rounded-full bg-waiting-soft px-1.5 text-[11px] font-medium text-waiting-fg"
+          title="Finished, but not deployed anywhere yet"
+        >
+          <CircleDashed className="size-3" aria-hidden />
+          Not deployed
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className={cn("flex flex-wrap gap-1", className)}>
+      {envs.map((e) => {
+        const d = t.deployments[e];
+        return d ? (
+          <span
+            key={e}
+            className="inline-flex h-[18px] max-w-full items-center gap-1 rounded-full bg-done-soft px-1.5 text-[11px] font-medium text-done-fg"
+            title={`Deployed to ${e}${d.version ? ` (${d.version})` : ""} ${relativeTime(d.at)} by ${d.actor}`}
+            suppressHydrationWarning
+          >
+            <Rocket className="size-3 shrink-0" aria-hidden />
+            <span className="truncate">{e}</span>
+          </span>
+        ) : (
+          <span
+            key={e}
+            className="inline-flex h-[18px] max-w-full items-center gap-1 rounded-full border border-dashed border-border-strong px-1.5 text-[11px] text-fg-subtle"
+            title={`Not deployed to ${e} yet`}
+          >
+            <CircleDashed className="size-3 shrink-0" aria-hidden />
+            <span className="truncate">{e}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function Assignees({ names }: { names: string[] }) {
   const shown = names.slice(0, 3);
   return (
@@ -188,6 +264,8 @@ export const SortableCard = memo(function SortableCard({
   showMilestone,
   reasonStatuses,
   stoppedStatuses,
+  environments,
+  doneStatus,
   col,
   index,
   selected,
@@ -236,6 +314,8 @@ export const SortableCard = memo(function SortableCard({
         showMilestone={showMilestone}
         reasonStatuses={reasonStatuses}
         stoppedStatuses={stoppedStatuses}
+        environments={environments}
+        doneStatus={doneStatus}
       />
     </div>
   );

@@ -90,29 +90,48 @@ Track before you start, without asking permission.
    curl -s -X POST ${api}/tasks/T-12.1/attachments ${H} -F file=@shot.png -F caption="Header overlaps the menu at 1280px"
    curl -s ${api}/tasks/T-12.1/attachments/7 ${H} -o shot.png     # read one back (ids are in GET /tasks/{ref})
    \`\`\`
-9. **Minor**: once the tweak is done,
+9. **Deployments** (only for work that ships code). Done means the work is finished; it does not mean it is live.
+   - Creating or starting an item that changes code which gets deployed: send \`"deployable": true\`. Writing,
+     research, planning and setup that never deploys stays plain (leave it out).
+   - When a deploy actually goes out and you have seen it succeed (CI passed, the URL serves the change), record it,
+     with every item that deploy shipped. Environments: Development (dev, preview, staging) and Production
+     (\`GET /settings\` → \`environments\`). Never record a deploy you only expect to happen.
+   \`\`\`bash
+   curl -s -X POST ${api}/deployments ${H} ${J} -d '{"environment":"Production","refs":["T-12.1","T-12.2"],"version":"<commit sha>","url":"https://<the live url>"}'
+   curl -s -X POST ${api}/deployments ${H} ${J} -d '{"environment":"Development","refs":["T-12"],"include_children":true,"version":"<sha>"}'
+   curl -s -X POST ${api}/tasks/T-12.1/rollback ${H} ${J} -d '{"environment":"Production","note":"Reverted: broke checkout"}'
+   curl -s "${api}/tasks?status=Done&not_deployed_to=Production" ${H}     # finished but not live yet
+   \`\`\`
+   If the owner deploys (you cannot push), close the item as Done and say it still needs a deploy; record it once
+   the owner confirms it is live.
+10. **Minor**: once the tweak is done,
    \`curl -s -X POST ${api}/tasks ${H} ${J} -d '{"title":"…","type":"minor","status":"Done","final_summary":"…"}'\`
    then \`curl -s -X POST ${api}/tasks/T-NN/archive ${H}\`.
-10. **Mention refs** (e.g. "Tracked as T-12, T-12.1") in your replies to the owner.
+11. **Mention refs** (e.g. "Tracked as T-12, T-12.1") in your replies to the owner.
 
 ## 3. Endpoints
 
-Body and query keys work in snake_case or camelCase. Refs are global: \`T-12\`, \`T-12.3\`, \`M-3\`, \`DOC-3\`, \`DEC-3\`.
+Body and query keys work in snake_case or camelCase; response keys are always camelCase. Refs are global: \`T-12\`, \`T-12.3\`, \`M-3\`, \`DOC-3\`, \`DEC-3\`.
 Errors: \`{"error":{"code","message"}}\` with 400 invalid, 401 bad token, 404 not found / not yours, 409 conflict.
 
 Tasks
 - \`GET /tasks\` filters: \`q\`, \`status\`, \`exclude_status\`, \`type\`, \`labels\`, \`priority\`, \`assignee\`,
   \`milestone\`, \`parent\`, \`top_level_only\`, \`include_archived\`, \`archived_only\`, \`drafts=exclude|include|only\`,
+  \`deployable=true|false\`, \`deployed_to=<env>\`, \`not_deployed_to=<env>\`,
   \`sort\`, \`order\`, \`limit\`, \`offset\` → \`{items,total}\`
 - \`POST /tasks\` \`{title, type?, parent?, status?, reason?, priority?, labels?, assignees?, milestone?, due_date?,
   description?, plan?, notes?, final_summary?, references?, documentation?, modified_files?,
-  acceptance_criteria?, definition_of_done?, depends_on?, is_draft?}\`
-- \`GET /tasks/{ref}\` full task (checklists, children, dependencies, comments, status_history, attachments, activity)
+  acceptance_criteria?, definition_of_done?, depends_on?, is_draft?, deployable?}\`
+- \`GET /tasks/{ref}\` full task (checklists, children, dependencies, comments, statusHistory, attachments,
+  deployable, deployments, deployHistory, activity)
 - \`PATCH /tasks/{ref}\` any field (\`status\` + \`reason\`; \`reason\` alone updates it), plus \`add_ac\`, \`check_ac\`, \`uncheck_ac\`, \`remove_ac\`, \`edit_ac\` [{index,text}],
   \`set_ac\`, \`reorder_ac\` (same for \`_dod\`), \`append_notes\`, \`append_plan\`, \`add_labels\`, \`remove_labels\`,
   \`add_deps\`, \`remove_deps\`, \`parent\` (ref or null)
 - \`POST /tasks/{ref}/archive|restore|promote|demote\`, \`GET|POST /tasks/{ref}/comments\` \`{body}\`
-- \`GET /tasks/{ref}/history\` the status trail: \`[{from,to,reason,actor,created_at}]\`, oldest first
+- \`GET /tasks/{ref}/history\` the status trail: \`[{from,to,reason,actor,createdAt}]\`, oldest first
+- \`POST /deployments\` \`{environment, refs, version?, url?, note?, include_children?}\` · \`GET /deployments?environment=&limit=\`
+  (recent deploys, newest first) · \`POST /tasks/{ref}/deploy\` \`{environment, version?, url?, note?}\` ·
+  \`POST /tasks/{ref}/rollback\` \`{environment, note?}\` · \`GET /tasks/{ref}/deployments\` (current + history)
 - \`GET|POST /tasks/{ref}/attachments\` (multipart \`file\` + \`caption\`, or JSON \`{data_base64, filename?, caption?}\`),
   \`GET|PATCH|DELETE /tasks/{ref}/attachments/{id}\` (GET returns the image; PATCH \`{caption}\`)
 - \`DELETE /tasks/{ref}\` (archived only), \`POST /tasks/move\` \`{ref, status?, reason?, before_ref?, after_ref?}\`,

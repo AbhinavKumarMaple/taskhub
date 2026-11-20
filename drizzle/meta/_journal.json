@@ -22,6 +22,13 @@
       "when": 1795145843477,
       "tag": "0002_status_roles_trail_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795178004478,
+      "tag": "0003_deployments",
+      "breakpoints": true
     }
   ]
 }
