@@ -15,6 +15,13 @@
       "when": 1795101165645,
       "tag": "0001_space_names_login_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795145843477,
+      "tag": "0002_status_roles_trail_attachments",
+      "breakpoints": true
     }
   ]
 }

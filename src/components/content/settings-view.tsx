@@ -1,10 +1,10 @@
 "use client";
 
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { Button, IconButton } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
-import { Input, Select } from "@/components/ui/input";
+import { Checkbox, Input, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/misc";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
@@ -29,7 +29,7 @@ const SECTIONS: {
   {
     key: "statuses",
     title: "Statuses",
-    description: "The order here is the order of the board columns. The last status counts as done.",
+    description: "The order here is the order of the board columns. Which one is done, which are finished and which need a reason is set under Status roles.",
     addPlaceholder: "Add a status, e.g. Review",
     allowEmpty: false,
     renames: true,
@@ -87,13 +87,21 @@ export function SettingsView({ settings }: { settings: Settings }) {
       />
       <div className="flex flex-col gap-4">
         {SECTIONS.map((s) => (
-          <ListSection
-            // Remount (fresh rows) when this list changes on the server, without touching other sections' drafts.
-            key={`${s.key}:${JSON.stringify(settings[s.key])}:${s.key === "statuses" ? settings.defaultStatus : ""}`}
-            section={s}
-            saved={settings[s.key]}
-            settings={settings}
-          />
+          <Fragment key={s.key}>
+            <ListSection
+              // Remount (fresh rows) when this list changes on the server, without touching other sections' drafts.
+              key={`${s.key}:${JSON.stringify(settings[s.key])}:${s.key === "statuses" ? settings.defaultStatus : ""}`}
+              section={s}
+              saved={settings[s.key]}
+              settings={settings}
+            />
+            {s.key === "statuses" && (
+              <StatusRoles
+                key={`roles:${JSON.stringify([settings.statuses, settings.doneStatus, settings.closedStatuses, settings.reasonStatuses])}`}
+                settings={settings}
+              />
+            )}
+          </Fragment>
         ))}
       </div>
     </div>
@@ -194,8 +202,13 @@ function ListSection({
                     className="min-w-0 flex-1"
                   />
                   <div className="flex w-44 shrink-0 items-center gap-1.5 overflow-hidden">
-                    {isStatuses && i === last && (
-                      <Chip size="xs" tone="done" dot title="Tasks in the last status count as done">
+                    {isStatuses && r.original !== null && settings.reasonStatuses.includes(r.original) && (
+                      <Chip size="xs" tone="blocked" title="Moving a task here needs a reason">
+                        reason
+                      </Chip>
+                    )}
+                    {isStatuses && r.original === settings.doneStatus && (
+                      <Chip size="xs" tone="done" dot title="Tasks in this status count as done">
                         done
                       </Chip>
                     )}
@@ -318,4 +331,97 @@ function ChangeSummary({
   if (!renames && rows.some((r) => r.original !== null && r.value.trim() !== r.original)) parts.push("edited");
   if (defaultChanged) parts.push("default status changed");
   return <p className="text-xs text-fg-muted">Unsaved: {parts.join(", ") || "changes"}.</p>;
+}
+
+/** Which status is done, which count as finished (Done, Cancelled) and which need a reason (Blocked, Cancelled). */
+function StatusRoles({ settings }: { settings: Settings }) {
+  const { run, pending, error } = useActionRunner();
+  const [done, setDone] = useState(settings.doneStatus);
+  const [closed, setClosed] = useState(settings.closedStatuses);
+  const [reason, setReason] = useState(settings.reasonStatuses);
+  const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  const closedAll = [...new Set([done, ...closed])];
+  const dirty =
+    done !== settings.doneStatus ||
+    JSON.stringify([...closedAll].sort()) !== JSON.stringify([...settings.closedStatuses].sort()) ||
+    JSON.stringify([...reason].sort()) !== JSON.stringify([...settings.reasonStatuses].sort());
+  useUnsavedWarning(dirty);
+
+  const save = () =>
+    run(() => updateSettingsAction({ doneStatus: done, closedStatuses: closedAll, reasonStatuses: reason.filter((r) => r !== done) }), {
+      inline: true,
+      success: "Status roles saved",
+    });
+
+  return (
+    <section aria-labelledby="settings-status-roles" className="rounded-lg border border-border bg-surface">
+      <div className="border-b border-border px-5 py-3">
+        <h2 id="settings-status-roles" className="text-[14px] font-semibold">
+          Status roles
+        </h2>
+        <p className="mt-0.5 text-xs text-fg-muted">
+          Finished statuses are not “open”, count toward a parent’s progress and can be cleaned up. Moving a task into a
+          status that needs a reason asks why, and the reason shows on the card and in the task’s status history.
+        </p>
+      </div>
+      <div className="flex flex-col gap-3 px-5 py-3">
+        <label className="flex items-center gap-3 text-[13px]">
+          <span className="w-28 shrink-0 text-xs text-fg-muted">Done status</span>
+          <Select
+            selectSize="sm"
+            className="w-48"
+            value={done}
+            onChange={(e) => setDone(e.target.value)}
+            options={settings.statuses.map((st) => ({ value: st, label: st }))}
+          />
+        </label>
+        <table className="w-full max-w-md text-[13px]">
+          <thead>
+            <tr className="text-left text-xs text-fg-muted">
+              <th className="py-1 font-medium">Status</th>
+              <th className="w-24 py-1 text-center font-medium">Finished</th>
+              <th className="w-28 py-1 text-center font-medium">Needs a reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {settings.statuses.map((st) => (
+              <tr key={st} className="border-t border-border">
+                <td className="py-1.5">{st}</td>
+                <td className="py-1.5 text-center">
+                  <span className="inline-flex">
+                    <Checkbox
+                      aria-label={`${st} counts as finished`}
+                      checked={closedAll.includes(st)}
+                      disabled={st === done}
+                      onChange={() => setClosed((c) => toggle(c, st))}
+                    />
+                  </span>
+                </td>
+                <td className="py-1.5 text-center">
+                  <span className="inline-flex">
+                    <Checkbox
+                      aria-label={`${st} needs a reason`}
+                      checked={reason.includes(st) && st !== done}
+                      disabled={st === done || st === settings.defaultStatus}
+                      onChange={() => setReason((r) => toggle(r, st))}
+                    />
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {error && (
+          <p className="text-xs text-danger" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end">
+          <Button size="sm" variant="primary" disabled={!dirty} loading={pending} onClick={() => void save()}>
+            Save status roles
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
 }

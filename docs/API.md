@@ -105,6 +105,30 @@ Refs are global and case-insensitive: `T-12`, `T-12.3`, `M-3`, `DOC-3`, `DEC-3`.
 - `sort=ordinal|ref|title|status|type|priority|space|milestone|ac|created|updated`, `order=asc|desc`.
 - `limit` (default 100, max 1000), `offset`.
 
+### Statuses, reasons and the status trail
+
+Default statuses: To Do, In Progress, **Blocked**, Done, **Cancelled**. Settings hold their roles:
+`done_status` (Done), `closed_statuses` (Done, Cancelled: not open, count toward a parent's progress, archived by
+cleanup) and `reason_statuses` (Blocked, Cancelled).
+
+- Moving into a reason status needs `reason` (400 without one): `PATCH /tasks/{ref} {"status":"Blocked","reason":"…"}`.
+  The same works on `POST /tasks`, `POST /tasks/move` and `POST /tasks/reorder`.
+- `{"reason":"…"}` alone updates the current reason. Leaving the status replaces it (an optional reason is kept).
+- Every task carries `status_reason` and `status_changed_at`; `GET /tasks/{ref}` adds `status_history`, and
+  `GET /tasks/{ref}/history` returns just the trail: `[{id, from, to, reason, actor, created_at}]`, oldest first.
+- Blocked work: `GET /tasks?status=Blocked`.
+
+### Screenshots (attachments)
+
+Optional; only when a picture explains something better than words. PNG, JPEG, GIF or WebP (checked from the bytes;
+SVG is refused), up to 3 MB each, 20 per task, 300 MB in total. Stored in Postgres; served only to callers holding
+the task's Space.
+
+- `POST /tasks/{ref}/attachments`: multipart (`file`, `caption`), JSON `{data_base64, filename?, caption?}`, or a raw
+  image body with `?caption=&filename=` → 201 `{id, filename, content_type, size, width, height, caption, url}`
+- `GET /tasks/{ref}/attachments` → metadata list · `GET /tasks/{ref}/attachments/{id}` → the image (`?download=1`)
+- `PATCH /tasks/{ref}/attachments/{id}` `{caption}` · `DELETE /tasks/{ref}/attachments/{id}`
+
 ### Milestones, documents, decisions
 
 All three share one shape: `{kind}` is `milestones`, `documents` or `decisions`.

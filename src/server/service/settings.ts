@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { getDb, type DbOrTx } from "../db";
-import { settings, tasks } from "../db/schema";
+import { settings, statusEvents, tasks } from "../db/schema";
 import { Conflict, Invalid } from "../errors";
 import { parse, updateSettingsInput, type UpdateSettingsInput } from "../validation";
 import { fieldList } from "@/lib/field-labels";
@@ -8,8 +8,11 @@ import type { Access, Settings } from "@/lib/types";
 import { diff, logActivity, requireOwnerAccess, withTx } from "./context";
 
 export const DEFAULT_SETTINGS = {
-  statuses: ["To Do", "In Progress", "Done"],
+  statuses: ["To Do", "In Progress", "Blocked", "Done", "Cancelled"],
   defaultStatus: "To Do",
+  doneStatus: "Done",
+  closedStatuses: ["Done", "Cancelled"],
+  reasonStatuses: ["Blocked", "Cancelled"],
   types: ["feature", "sub-feature", "fix", "minor"],
   priorities: ["High", "Medium", "Low"],
   labels: ["waiting"],
@@ -17,10 +20,16 @@ export const DEFAULT_SETTINGS = {
 };
 
 function shape(row: typeof settings.$inferSelect): Settings {
+  const doneStatus = row.statuses.includes(row.doneStatus) ? row.doneStatus : row.statuses[row.statuses.length - 1];
+  const closedStatuses = [doneStatus, ...row.closedStatuses.filter((s) => s !== doneStatus && row.statuses.includes(s))];
+  const reasonStatuses = row.reasonStatuses.filter((s) => row.statuses.includes(s) && s !== doneStatus);
   return {
     statuses: row.statuses,
     defaultStatus: row.defaultStatus,
-    doneStatus: row.statuses[row.statuses.length - 1],
+    doneStatus,
+    closedStatuses,
+    reasonStatuses,
+    stoppedStatuses: reasonStatuses.filter((s) => !closedStatuses.includes(s)),
     types: row.types,
     priorities: row.priorities,
     labels: row.labels,
@@ -71,6 +80,9 @@ export async function updateSettings(access: Access, input: UpdateSettingsInput)
       labels: p.labels ?? cur.labels,
       dodDefaults: p.dodDefaults ?? cur.dodDefaults,
       defaultStatus: p.defaultStatus ?? cur.defaultStatus,
+      doneStatus: p.doneStatus ?? cur.doneStatus,
+      closedStatuses: p.closedStatuses ?? cur.closedStatuses,
+      reasonStatuses: p.reasonStatuses ?? cur.reasonStatuses,
     };
 
     for (const key of ["statuses", "types", "priorities", "labels"] as ListKey[]) {
@@ -96,7 +108,14 @@ export async function updateSettings(access: Access, input: UpdateSettingsInput)
             .where(eq(tasks[col], r.from));
         }
         oldList[oldList.indexOf(r.from)] = r.to;
-        if (key === "statuses" && next.defaultStatus === r.from) next.defaultStatus = r.to;
+        if (key === "statuses") {
+          if (next.defaultStatus === r.from) next.defaultStatus = r.to;
+          if (next.doneStatus === r.from) next.doneStatus = r.to;
+          next.closedStatuses = next.closedStatuses.map((s) => (s === r.from ? r.to : s));
+          next.reasonStatuses = next.reasonStatuses.map((s) => (s === r.from ? r.to : s));
+          await tx.update(statusEvents).set({ toStatus: r.to }).where(eq(statusEvents.toStatus, r.from));
+          await tx.update(statusEvents).set({ fromStatus: r.to }).where(eq(statusEvents.fromStatus, r.from));
+        }
       }
       const removed = oldList.filter((v) => !next[key].includes(v));
       for (const v of removed) {
@@ -112,6 +131,18 @@ export async function updateSettings(access: Access, input: UpdateSettingsInput)
       if (p.defaultStatus) throw new Invalid(`defaultStatus "${p.defaultStatus}" is not a status`);
       next.defaultStatus = next.statuses[0];
     }
+    if (!next.statuses.includes(next.doneStatus)) {
+      if (p.doneStatus) throw new Invalid(`doneStatus "${p.doneStatus}" is not a status`);
+      next.doneStatus = next.statuses[next.statuses.length - 1];
+    }
+    for (const [k, list] of [["closedStatuses", next.closedStatuses], ["reasonStatuses", next.reasonStatuses]] as const) {
+      const bad = list.filter((s) => !next.statuses.includes(s));
+      if (bad.length && p[k]) throw new Invalid(`${k}: "${bad[0]}" is not a status`);
+    }
+    next.closedStatuses = [...new Set([next.doneStatus, ...next.closedStatuses.filter((s) => next.statuses.includes(s))])];
+    next.reasonStatuses = next.reasonStatuses.filter((s) => next.statuses.includes(s) && s !== next.doneStatus);
+    if (next.reasonStatuses.includes(next.defaultStatus))
+      throw new Invalid(`The default status "${next.defaultStatus}" cannot be one that needs a reason`);
 
     const changes = diff(
       { ...cur } as Record<string, unknown>,

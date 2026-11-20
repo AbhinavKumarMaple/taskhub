@@ -130,7 +130,9 @@ describe("MCP endpoint", () => {
     expect((board.structuredContent as { columns: { status: string }[] }).columns.map((c) => c.status)).toEqual([
       "To Do",
       "In Progress",
+      "Blocked",
       "Done",
+      "Cancelled",
     ]);
 
     const search = await tool(client, "search", { space_key: key, q: "page payment" });

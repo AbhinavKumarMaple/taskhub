@@ -42,6 +42,21 @@ export function relativeTime(d: DateLike, now: Date = new Date()): string {
   return formatDate(x);
 }
 
+/** How long something has been in a state: "for 5m", "for 3h", "for 4d", "for 2w", "since 3 Oct". */
+export function durationSince(d: DateLike, now: Date = new Date()): string {
+  const x = toDate(d);
+  if (!x) return "";
+  const m = Math.max(0, Math.round((now.getTime() - x.getTime()) / 60_000));
+  if (m < 1) return "just now";
+  if (m < 60) return `for ${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `for ${h}h`;
+  const days = Math.round(h / 24);
+  if (days < 14) return `for ${days}d`;
+  if (days < 60) return `for ${Math.round(days / 7)}w`;
+  return `since ${formatDate(x)}`;
+}
+
 /** Due date (YYYY-MM-DD) label + whether it is overdue/today. */
 export function formatDue(due: string | null | undefined, now: Date = new Date()) {
   if (!due) return null;

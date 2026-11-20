@@ -21,7 +21,8 @@ export type ActivityAction =
   | "commented"
   | "promoted"
   | "demoted"
-  | "moved";
+  | "moved"
+  | "attached";
 
 /** `{ actor, spaces }` — every service call takes one. `spaces: 'all'` = owner. */
 export type Access = { actor: string; spaces: "all" | string[] };
@@ -31,8 +32,14 @@ export type FieldChanges = Record<string, { from: unknown; to: unknown }>;
 export type Settings = {
   statuses: string[];
   defaultStatus: string;
-  /** The last status; the "done" one. */
+  /** The completed status (ticks the box). */
   doneStatus: string;
+  /** Finished statuses (done + e.g. Cancelled): not "open", count toward a parent's progress. */
+  closedStatuses: string[];
+  /** Moving into these needs a reason (e.g. Blocked, Cancelled). */
+  reasonStatuses: string[];
+  /** Reason statuses that are not closed: work that has stopped and needs attention (e.g. Blocked). */
+  stoppedStatuses: string[];
   types: string[];
   priorities: string[];
   labels: string[];
@@ -71,6 +78,10 @@ export type TaskSummary = {
   isDraft: boolean;
   title: string;
   status: string;
+  /** Why it is in this status ("" when none was given). */
+  statusReason: string;
+  /** When it entered this status. */
+  statusChangedAt: Date;
   type: string;
   priority: string | null;
   labels: string[];
@@ -88,7 +99,7 @@ export type TaskSummary = {
   /** Non-archived children by status. */
   childCounts: Record<string, number>;
   childTotal: number;
-  /** Children in the done status. */
+  /** Children in a closed status (done or cancelled). */
   childDone: number;
 };
 
@@ -96,6 +107,30 @@ export type TaskLite = { ref: string; title: string; status: string; type: strin
 
 /** A dependency in a transitive tree. depth 1 = direct; `via` = the ref it hangs under (null for direct). */
 export type DepNode = TaskLite & { depth: number; via: string | null };
+
+/** One step in a task's status trail. `from` is null for the first status. */
+export type StatusEvent = {
+  id: number;
+  from: string | null;
+  to: string;
+  reason: string;
+  actor: string;
+  createdAt: Date;
+};
+
+export type Attachment = {
+  id: number;
+  filename: string;
+  contentType: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  caption: string;
+  actor: string;
+  createdAt: Date;
+  /** Path under /api/v1 that serves the image. */
+  url: string;
+};
 
 export type Comment = { id: number; author: string; body: string; createdAt: Date };
 
@@ -128,6 +163,10 @@ export type TaskFull = TaskSummary & {
   /** What waits on this task, transitive, depth-first. */
   blocks: DepNode[];
   comments: Comment[];
+  /** Oldest first: every status the task has been in, with who moved it and why. */
+  statusHistory: StatusEvent[];
+  /** Screenshots, oldest first (metadata only; fetch `url` for the image). */
+  attachments: Attachment[];
   /** Newest first, up to 100. */
   activity: Activity[];
 };
@@ -210,6 +249,8 @@ export type NavCounts = {
   /** Board: non-archived, non-draft tasks (all types). */
   board: number;
   tasks: number;
+  /** Non-archived tasks in a stopped status (Blocked). */
+  blocked: number;
   drafts: number;
   archive: number;
   milestones: number;

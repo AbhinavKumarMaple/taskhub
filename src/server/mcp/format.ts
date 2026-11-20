@@ -31,7 +31,8 @@ export function taskLine(t: TaskSummary): string {
     t.isDraft ? "draft" : "",
     t.archivedAt ? "archived" : "",
   ].filter(Boolean);
-  return `${t.ref} [${t.status}] ${t.title} (${bits.join(", ")})${extra.length ? " · " + extra.join(" · ") : ""}`;
+  const why = t.statusReason && t.status !== "Done" ? ` — ${t.statusReason}` : "";
+  return `${t.ref} [${t.status}${why}] ${t.title} (${bits.join(", ")})${extra.length ? " · " + extra.join(" · ") : ""}`;
 }
 
 function checklist(title: string, items: ChecklistItem[]): string[] {
@@ -92,6 +93,20 @@ export function taskDetail(t: TaskFull): string {
     ...(t.comments.length
       ? [`Comments (${t.comments.length}):`, ...t.comments.map((c) => `  ${iso(c.createdAt)} ${c.author}: ${c.body}`)]
       : []),
+    ...(t.attachments.length
+      ? [
+          `Screenshots (${t.attachments.length}):`,
+          ...t.attachments.map((a) => `  #${a.id} ${a.filename}${a.caption ? ` — ${a.caption}` : ""} (GET ${a.url})`),
+        ]
+      : []),
+    ...(t.statusHistory.length > 1
+      ? [
+          "Status history:",
+          ...t.statusHistory.map(
+            (e) => `  ${new Date(e.createdAt).toISOString().slice(0, 16).replace("T", " ")} ${e.from ?? "created"} → ${e.to} by ${e.actor}${e.reason ? `: ${e.reason}` : ""}`,
+          ),
+        ]
+      : []),
   ];
   return lines.join("\n");
 }
@@ -113,7 +128,7 @@ export function spaceInfoText(spaces: SpaceWithCounts[], settings: Settings): st
   return [
     "Spaces:",
     ...lines,
-    `Statuses: ${settings.statuses.join(" → ")} (default ${settings.defaultStatus}; done = ${settings.doneStatus})`,
+    `Statuses: ${settings.statuses.join(" → ")} (default ${settings.defaultStatus}; done = ${settings.doneStatus}; finished = ${settings.closedStatuses.join(", ")}; need a reason = ${settings.reasonStatuses.join(", ") || "none"})`,
     `Types: ${settings.types.join(", ")}`,
     `Priorities: ${settings.priorities.join(", ") || "none"}`,
     `Labels: ${settings.labels.join(", ") || "none"}`,

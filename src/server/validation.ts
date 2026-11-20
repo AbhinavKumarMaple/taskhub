@@ -70,6 +70,8 @@ export const createTaskInput = z.object({
   title: name,
   description: longText.optional(),
   status: shortText.optional(),
+  /** Why: required when moving into a status that needs a reason (Blocked, Cancelled); optional otherwise. */
+  reason: z.string().trim().max(5000).optional(),
   type: shortText.optional(),
   priority: shortText.nullable().optional(),
   labels: tagList.optional(),
@@ -96,6 +98,8 @@ export const updateTaskInput = z.object({
   title: name.optional(),
   description: longText.optional(),
   status: shortText.optional(),
+  /** Why: required when moving into a status that needs a reason (Blocked, Cancelled); optional otherwise. */
+  reason: z.string().trim().max(5000).optional(),
   type: shortText.optional(),
   priority: shortText.nullable().optional(),
   labels: tagList.optional(),
@@ -186,6 +190,8 @@ export type ListTasksInput = z.input<typeof listTasksInput>;
 export const moveTaskInput = z.object({
   ref: taskRef,
   status: shortText.optional(),
+  /** Why: required when moving into a status that needs a reason (Blocked, Cancelled); optional otherwise. */
+  reason: z.string().trim().max(5000).optional(),
   /** Explicit ordinal; otherwise placed between beforeRef/afterRef, or at the end of the column. */
   ordinal: z.number().finite().optional(),
   /** Place directly above this task. */
@@ -197,6 +203,8 @@ export type MoveTaskInput = z.input<typeof moveTaskInput>;
 
 export const reorderTasksInput = z.object({
   status: shortText.optional(),
+  /** Why: required when moving into a status that needs a reason (Blocked, Cancelled); optional otherwise. */
+  reason: z.string().trim().max(5000).optional(),
   refs: z.array(taskRef).min(1).max(1000),
 });
 
@@ -291,6 +299,12 @@ const renames = z.array(z.object({ from: shortText, to: shortText })).max(50);
 export const updateSettingsInput = z.object({
   statuses: configList.min(1).optional(),
   defaultStatus: shortText.optional(),
+  /** The completed status. */
+  doneStatus: shortText.optional(),
+  /** Statuses that count as finished (the done status is always one). */
+  closedStatuses: configList.optional(),
+  /** Statuses that need a reason when a task moves into them. */
+  reasonStatuses: configList.optional(),
   types: configList.min(1).optional(),
   priorities: configList.optional(),
   labels: configList.optional(),

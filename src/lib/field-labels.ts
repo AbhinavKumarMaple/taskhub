@@ -12,6 +12,11 @@ export const FIELD_LABELS: Record<string, string> = {
   milestoneId: "milestone",
   defaultStatus: "default status",
   dodDefaults: "Definition of Done defaults",
+  statusReason: "reason",
+  doneStatus: "done status",
+  closedStatuses: "finished statuses",
+  reasonStatuses: "statuses that need a reason",
+  attachments: "screenshots",
 };
 
 /** `finalSummary` → "final summary"; known keys use FIELD_LABELS. */

@@ -27,11 +27,14 @@ Taskhub is where work is tracked. You see only the Spaces whose key you pass as 
 4. **In Progress.** Move an item to In Progress when you start on it, and its feature too. Keep only what
    you are actively working on In Progress. Write the plan into \`plan\` before you start on anything
    non-trivial, and append progress to \`notes\` as you go.
-5. **Waiting.** When an item is blocked on the owner or someone else, add the \`waiting\` label to the item
-   and to its parent feature, and say what you are waiting for in \`notes\`. Remove the label from both when
-   it is unblocked.
+5. **Blocked.** When an item cannot go on (waiting on the owner, someone else or another task), set its status
+   to Blocked with a \`reason\`: what it waits for and who can unblock it (required). The feature stays In Progress.
+   Update the reason with \`reason\` alone; when unblocked, move it back to In Progress (a reason is optional).
+   Work that will not be done goes to Cancelled, also with a \`reason\`.
 6. **Done.** Check the item's acceptance criteria, write a short \`final_summary\`, list \`modified_files\`,
-   then set the status to Done. When every sub-feature of a feature is Done, close the feature the same way.
+   then set the status to Done. When every sub-feature of a feature is Done or Cancelled, close the feature the
+   same way. Screenshots are optional: attach one (REST \`POST /api/v1/tasks/{ref}/attachments\`) only when a
+   picture explains something better than words.
 7. **Minor tweaks.** Create the item with status Done and a one-line summary, then archive it
    (\`task_archive\`), so it is recorded without cluttering the board.
 8. **Mention refs.** In every reply to the owner, name the refs you created or changed (e.g. "T-12, T-12.3").

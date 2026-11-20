@@ -33,8 +33,10 @@ describe("settings", () => {
 
     // restore defaults for the rest of the file
     await svc.updateSettings(OWNER, {
-      statuses: ["To Do", "In Progress", "Done"],
+      statuses: ["To Do", "In Progress", "Blocked", "Done", "Cancelled"],
       renames: { statuses: [{ from: "Backlog", to: "To Do" }] },
+      closedStatuses: ["Done", "Cancelled"],
+      reasonStatuses: ["Blocked", "Cancelled"],
     });
     const log = await svc.listActivity(OWNER, { entityRef: "settings" });
     expect(log.items[0].entityType).toBe("settings");
@@ -86,7 +88,9 @@ describe("statistics", () => {
     expect(s.byStatus).toEqual([
       { name: "To Do", count: 1 },
       { name: "In Progress", count: 0 },
+      { name: "Blocked", count: 0 },
       { name: "Done", count: 2 },
+      { name: "Cancelled", count: 0 },
     ]);
     expect(s.byType.find((r) => r.name === "fix")?.count).toBe(1);
     expect(s.byPriority.find((r) => r.name === "High")?.count).toBe(1);

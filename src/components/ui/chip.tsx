@@ -2,7 +2,17 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { SpaceColor, SpaceRef } from "@/lib/types";
 
-export type ChipTone = "neutral" | "accent" | "todo" | "progress" | "done" | "waiting" | "danger" | "outline";
+export type ChipTone =
+  | "neutral"
+  | "accent"
+  | "todo"
+  | "progress"
+  | "done"
+  | "waiting"
+  | "danger"
+  | "outline"
+  | "blocked"
+  | "cancelled";
 
 const TONES: Record<ChipTone, string> = {
   neutral: "bg-surface-2 text-fg-muted border-transparent",
@@ -13,6 +23,8 @@ const TONES: Record<ChipTone, string> = {
   done: "bg-done-soft text-done-fg border-transparent",
   waiting: "bg-waiting-soft text-waiting-fg border-transparent",
   danger: "bg-danger-soft text-danger-soft-fg border-transparent",
+  blocked: "bg-danger-soft text-danger-soft-fg border-transparent",
+  cancelled: "bg-surface-2 text-fg-subtle border-border line-through decoration-fg-subtle/60",
 };
 
 export type ChipProps = HTMLAttributes<HTMLSpanElement> & {
@@ -45,17 +57,26 @@ export function Chip({ tone = "neutral", size = "sm", dot, dotClassName, icon, c
 export const Badge = Chip;
 
 /**
- * Tone for a status: the first configured status is "todo", the last is "done", anything between is
- * "progress". Without `statuses`, uses the defaults' names.
+ * Tone for a status. Blocked/On hold → "blocked", Cancelled/Dropped → "cancelled", Done → "done" (by name);
+ * otherwise the first configured status is "todo" and the rest are "progress". `roles` (from settings)
+ * overrides the name guesses when given.
  */
-export function statusTone(status: string, statuses?: string[]): ChipTone {
+export function statusTone(
+  status: string,
+  statuses?: string[],
+  roles?: { doneStatus?: string; closedStatuses?: string[]; stoppedStatuses?: string[] },
+): ChipTone {
+  const s = status.toLowerCase();
+  if (roles?.doneStatus === status) return "done";
+  if (roles?.stoppedStatuses?.includes(status)) return "blocked";
+  if (roles?.closedStatuses?.includes(status)) return "cancelled";
+  if (/^(blocked|on hold|stuck|paused)$/.test(s)) return "blocked";
+  if (/^(cancell?ed|dropped|won'?t do|abandoned)$/.test(s)) return "cancelled";
+  if (/^(done|complete|completed|shipped)$/.test(s)) return "done";
   if (statuses?.length) {
-    if (status === statuses[statuses.length - 1]) return "done";
     if (status === statuses[0]) return "todo";
     return statuses.includes(status) ? "progress" : "neutral";
   }
-  const s = status.toLowerCase();
-  if (s === "done") return "done";
   if (s === "to do" || s === "todo") return "todo";
   return "progress";
 }

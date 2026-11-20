@@ -86,6 +86,9 @@ export async function getNavCounts(access: Access, input: { spaces?: string[] } 
         : sql<number>`(count(*) filter (where ${tasks.archivedAt} is null and not ${tasks.isDraft}))::int`,
       tasks: sql<number>`(count(*) filter (where ${tasks.archivedAt} is null and not ${tasks.isDraft}))::int`,
       drafts: sql<number>`(count(*) filter (where ${tasks.archivedAt} is null and ${tasks.isDraft}))::int`,
+      blocked: settings.stoppedStatuses.length
+        ? sql<number>`(count(*) filter (where ${tasks.archivedAt} is null and not ${tasks.isDraft} and ${inArray(tasks.status, settings.stoppedStatuses)}))::int`
+        : sql<number>`0`,
       archive: sql<number>`(count(*) filter (where ${tasks.archivedAt} is not null))::int`,
     })
     .from(tasks)

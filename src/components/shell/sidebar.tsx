@@ -14,6 +14,7 @@ import {
   List,
   LogOut,
   NotebookPen,
+  OctagonPause,
   Plug,
   Scale,
   Search,
@@ -37,6 +38,7 @@ export type SidebarSpace = { id: string; name: string; color: SpaceColor };
 const ICONS: Record<NavKey, typeof List> = {
   board: KanbanSquare,
   tasks: List,
+  blocked: OctagonPause,
   drafts: NotebookPen,
   archive: Archive,
   milestones: Flag,
@@ -52,6 +54,7 @@ const ICONS: Record<NavKey, typeof List> = {
 const COUNTED: Partial<Record<NavKey, keyof NavCounts>> = {
   board: "board",
   tasks: "tasks",
+  blocked: "blocked",
   drafts: "drafts",
   archive: "archive",
   milestones: "milestones",
@@ -160,7 +163,16 @@ function SpaceSwitcher({ spaces, current }: { spaces: SidebarSpace[]; current?: 
 }
 
 /** Left navigation. Keeps `?space=` on every link. Also mounts the ⌘K palette. */
-export function Sidebar({ spaces, counts }: { spaces: SidebarSpace[]; counts: Record<string, NavCounts> }) {
+export function Sidebar({
+  spaces,
+  counts,
+  stopped = [],
+}: {
+  spaces: SidebarSpace[];
+  counts: Record<string, NavCounts>;
+  /** Stopped statuses (Blocked): the "Blocked" item lists tasks in these. */
+  stopped?: string[];
+}) {
   const pathname = usePathname();
   const sp = useSearchParams();
   const { setMobileOpen } = useShell();
@@ -209,14 +221,24 @@ export function Sidebar({ spaces, counts }: { spaces: SidebarSpace[]; counts: Re
         <ul className="flex flex-col gap-px">
           {NAV_ITEMS.map((item, i) => {
             const Icon = ICONS[item.key];
-            const active = pathname === item.path || pathname.startsWith(item.path + "/");
+            // "Blocked" is All tasks filtered to the stopped statuses; only one of the two is highlighted.
+            const isBlockedView = pathname === "/tasks" && !!sp.get("status") && stopped.includes(sp.get("status")!);
+            const active =
+              item.key === "blocked"
+                ? isBlockedView
+                : (pathname === item.path || pathname.startsWith(item.path + "/")) && !(item.key === "tasks" && isBlockedView);
             const countKey = COUNTED[item.key];
             const n = countKey ? c?.[countKey] : undefined;
-            const gap = i === 7 || i === 9; // groups: work · insight · admin
+            const gap = i === 8 || i === 10; // groups: work · insight · admin
+            if (item.key === "blocked" && !stopped.length) return null;
             return (
               <li key={item.key} className={cn(gap && "mt-3")}>
                 <Link
-                  href={href(item.path, "params" in item ? item.params : {}, current?.id)}
+                  href={href(
+                    item.path,
+                    item.key === "blocked" ? { ...item.params, status: stopped.join(",") } : "params" in item ? item.params : {},
+                    current?.id,
+                  )}
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex h-7 items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors",
@@ -225,7 +247,16 @@ export function Sidebar({ spaces, counts }: { spaces: SidebarSpace[]; counts: Re
                 >
                   <Icon className={cn("size-4 shrink-0", active ? "text-fg" : "text-fg-subtle")} aria-hidden />
                   <span className="flex-1 truncate">{item.label}</span>
-                  {n !== undefined && n > 0 && <span className="text-xs tabular-nums text-fg-subtle">{n}</span>}
+                  {n !== undefined && n > 0 && (
+                    <span
+                      className={cn(
+                        "text-xs tabular-nums",
+                        item.key === "blocked" ? "rounded-full bg-danger-soft px-1.5 font-medium text-danger-soft-fg" : "text-fg-subtle",
+                      )}
+                    >
+                      {n}
+                    </span>
+                  )}
                 </Link>
               </li>
             );

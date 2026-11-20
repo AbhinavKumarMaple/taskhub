@@ -4,6 +4,7 @@
  */
 export * from "./spaces";
 export * from "./tasks";
+export * from "./attachments";
 export * from "./milestones";
 export * from "./documents";
 export * from "./decisions";

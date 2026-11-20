@@ -17,7 +17,7 @@ export function weekStart(d: Date): Date {
   return new Date(x.getTime() - dow * DAY);
 }
 
-/** Counts by status/type/priority, completion, weekly created vs completed, oldest open, waiting. */
+/** Counts by status/type/priority, completion, weekly created vs completed, oldest open, blocked/waiting. */
 export async function statistics(access: Access, input: { spaces?: string[] } = {}): Promise<Statistics> {
   const p = parse(statisticsInput, input);
   const db = await getDb();
@@ -43,7 +43,9 @@ export async function statistics(access: Access, input: { spaces?: string[] } = 
     group(tasks.type, settings.types),
     group(tasks.priority, settings.priorities),
   ]);
-  const total = byStatus.reduce((a, r) => a + r.count, 0);
+  // Cancelled (closed but not done) work is left out of completion.
+  const dropped = byStatus.filter((r) => settings.closedStatuses.includes(r.name) && r.name !== done);
+  const total = byStatus.reduce((a, r) => a + r.count, 0) - dropped.reduce((a, r) => a + r.count, 0);
   const doneCount = byStatus.find((r) => r.name === done)?.count ?? 0;
 
   // weekly: last 8 weeks including this one
@@ -77,17 +79,23 @@ export async function statistics(access: Access, input: { spaces?: string[] } = 
     };
   });
 
-  const [oldest, waiting] = await Promise.all([
-    listTasks(access, { spaces: p.spaces, excludeStatus: [done], sort: "created", order: "asc", limit: 10 }),
+  const closed = settings.closedStatuses;
+  const [oldest, waitingLabel, stopped] = await Promise.all([
+    listTasks(access, { spaces: p.spaces, excludeStatus: closed, sort: "created", order: "asc", limit: 10 }),
     listTasks(access, {
       spaces: p.spaces,
-      excludeStatus: [done],
+      excludeStatus: closed,
       labels: [WAITING_LABEL],
       sort: "updated",
       order: "desc",
       limit: 50,
     }),
+    settings.stoppedStatuses.length
+      ? listTasks(access, { spaces: p.spaces, status: settings.stoppedStatuses, sort: "updated", order: "desc", limit: 50 })
+      : Promise.resolve({ items: [], total: 0 }),
   ]);
+  // Blocked (stopped statuses) first, then anything still carrying the old "waiting" label.
+  const waiting = [...stopped.items, ...waitingLabel.items.filter((t) => !stopped.items.some((x) => x.id === t.id))];
 
   return {
     total,
@@ -97,6 +105,6 @@ export async function statistics(access: Access, input: { spaces?: string[] } = 
     completion: { done: doneCount, total, percent: total ? Math.round((doneCount / total) * 100) : 0 },
     weekly,
     oldestOpen: oldest.items,
-    waiting: waiting.items,
+    waiting,
   };
 }

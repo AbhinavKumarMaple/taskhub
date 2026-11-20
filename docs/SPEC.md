@@ -7,7 +7,7 @@ runs on Vercel. Private project. Never mention any company or client in code, se
 ## Concepts
 
 - **Owner**: the human. Signs into the web app with `OWNER_PASSWORD`. Sees and edits every Space.
-- **Space**: a board of work, e.g. "lotbank", "home server", or one chat's own work. Has
+- **Space**: a board of work, e.g. "recipe site", "home server", or one chat's own work. Has
   - `id` `sp_` + 10 random base32 chars (shown in URLs and UI),
   - `key` `sk_` + 32 random base32 chars — the credential a chat holds. Stored in plain text so the owner can
     copy it from the Spaces page at any time; the owner can regenerate it (old key stops working at once).

@@ -5,6 +5,7 @@ import {
   ArrowRightLeft,
   CircleDot,
   FilePen,
+  ImagePlus,
   MessageSquare,
   MoveRight,
   Plus,
@@ -32,6 +33,7 @@ const ICONS: Record<ActivityAction, LucideIcon> = {
   promoted: ArrowUpFromLine,
   demoted: ArrowDownToLine,
   moved: MoveRight,
+  attached: ImagePlus,
 };
 
 

@@ -7,6 +7,8 @@ import type { ListTasksInput } from "@/server/validation";
 export type MoveCardInput = {
   ref: string;
   status: string;
+  /** Required when moving into Blocked/Cancelled. */
+  reason?: string;
   beforeRef?: string;
   afterRef?: string;
   /** Swimlane drops: the lane's milestone ref, or null for "No milestone". Omit to keep it. */
@@ -20,6 +22,7 @@ export async function moveCardAction(input: MoveCardInput) {
     return svc.moveTask(a, {
       ref: input.ref,
       status: input.status,
+      reason: input.reason,
       beforeRef: input.beforeRef,
       afterRef: input.afterRef,
     });
@@ -54,7 +57,7 @@ export async function addCardAction(input: AddCardInput) {
   });
 }
 
-/** Column menu: archive Done tasks last updated more than `days` days ago. */
+/** Column menu: archive finished (Done/Cancelled) tasks last updated more than `days` days ago. */
 export async function cleanupDoneAction(days: number, space?: string) {
   return runAction((a) => svc.cleanupDone(a, { olderThanDays: days, spaces: space ? [space] : undefined }));
 }

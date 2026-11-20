@@ -107,7 +107,7 @@ export async function listSpaces(
       else {
         c.total += k.n;
         c.byStatus[k.status] = (c.byStatus[k.status] ?? 0) + k.n;
-        if (k.status !== settings.doneStatus) c.open += k.n;
+        if (!settings.closedStatuses.includes(k.status)) c.open += k.n;
       }
     }
     return { ...shape(r), counts: c };

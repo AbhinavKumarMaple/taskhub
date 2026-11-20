@@ -199,7 +199,7 @@ describe("milestones, documents, decisions, settings, misc", () => {
     expect((await call(decisionsRoute.GET, "GET", "/decisions", { key, query: { status: "accepted" } })).body).toHaveLength(1);
 
     const settings = await call(settingsRoute.GET, "GET", "/settings", { key });
-    expect(settings.body.statuses).toEqual(["To Do", "In Progress", "Done"]);
+    expect(settings.body.statuses).toEqual(["To Do", "In Progress", "Blocked", "Done", "Cancelled"]);
     const forbidden = await call(settingsRoute.PATCH, "PATCH", "/settings", { key, body: { labels: ["waiting", "x"] } });
     expect(forbidden.status).toBe(403);
 

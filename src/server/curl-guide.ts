@@ -70,16 +70,30 @@ Track before you start, without asking permission.
    A feature stays In Progress until all its children are Done; never move it back to To Do.
 4. **Progress**: \`{"append_notes":"…"}\`. Tick a check only once verified: \`{"check_ac":[1]}\` (1-based;
    several at once: \`[1,2]\`).
-5. **Waiting** on the owner: add the label to the item AND its feature, and say why:
-   \`{"add_labels":["waiting"],"append_notes":"Waiting on: …"}\`; when unblocked \`{"remove_labels":["waiting"]}\`.
-6. **Done**: tick the item's own verified checks and close it in one call:
+5. **Blocked** (waiting on the owner, someone else, or another task): move the item to Blocked with a \`reason\`
+   that says what it waits for and who can unblock it. A reason is required; it shows on the card and stays in the
+   task's status history. The feature stays In Progress (its card shows "1 blocked").
+   \`\`\`bash
+   curl -s -X PATCH ${api}/tasks/T-12.1 ${H} ${J} -d '{"status":"Blocked","reason":"Waiting on: the owner to pick a PDF library"}'
+   curl -s -X PATCH ${api}/tasks/T-12.1 ${H} ${J} -d '{"reason":"Waiting on: the owner (asked again 20 Nov)"}'   # update the reason
+   curl -s -X PATCH ${api}/tasks/T-12.1 ${H} ${J} -d '{"status":"In Progress","reason":"Owner chose pdfkit"}'     # unblocked
+   \`\`\`
+6. **Cancelled**: work that will not be done (dropped, duplicate, replaced): \`{"status":"Cancelled","reason":"Replaced by T-40"}\`.
+   A reason is required. Cancelled counts as finished for the feature's progress; untick nothing, add nothing.
+7. **Done**: tick the item's own verified checks and close it in one call:
    \`{"check_ac":[1,2],"final_summary":"…","modified_files":["…"],"status":"Done"}\`, then tick the feature's check
-   for that child (\`{"check_ac":[n]}\`). The feature never closes by itself: when every child is Done, close it
-   the same way (\`final_summary\` + \`"status":"Done"\`).
-7. **Minor**: once the tweak is done,
+   for that child (\`{"check_ac":[n]}\`). The feature never closes by itself: when every child is Done or Cancelled,
+   close it the same way (\`final_summary\` + \`"status":"Done"\`).
+8. **Screenshots** are optional and not the default. Attach one only when a picture explains something better than
+   words (a visual bug, a layout before/after, an error dialog). PNG/JPEG/WebP/GIF, up to 3 MB, with a caption:
+   \`\`\`bash
+   curl -s -X POST ${api}/tasks/T-12.1/attachments ${H} -F file=@shot.png -F caption="Header overlaps the menu at 1280px"
+   curl -s ${api}/tasks/T-12.1/attachments/7 ${H} -o shot.png     # read one back (ids are in GET /tasks/{ref})
+   \`\`\`
+9. **Minor**: once the tweak is done,
    \`curl -s -X POST ${api}/tasks ${H} ${J} -d '{"title":"…","type":"minor","status":"Done","final_summary":"…"}'\`
    then \`curl -s -X POST ${api}/tasks/T-NN/archive ${H}\`.
-8. **Mention refs** (e.g. "Tracked as T-12, T-12.1") in your replies to the owner.
+10. **Mention refs** (e.g. "Tracked as T-12, T-12.1") in your replies to the owner.
 
 ## 3. Endpoints
 
@@ -90,16 +104,21 @@ Tasks
 - \`GET /tasks\` filters: \`q\`, \`status\`, \`exclude_status\`, \`type\`, \`labels\`, \`priority\`, \`assignee\`,
   \`milestone\`, \`parent\`, \`top_level_only\`, \`include_archived\`, \`archived_only\`, \`drafts=exclude|include|only\`,
   \`sort\`, \`order\`, \`limit\`, \`offset\` → \`{items,total}\`
-- \`POST /tasks\` \`{title, type?, parent?, status?, priority?, labels?, assignees?, milestone?, due_date?,
+- \`POST /tasks\` \`{title, type?, parent?, status?, reason?, priority?, labels?, assignees?, milestone?, due_date?,
   description?, plan?, notes?, final_summary?, references?, documentation?, modified_files?,
   acceptance_criteria?, definition_of_done?, depends_on?, is_draft?}\`
-- \`GET /tasks/{ref}\` full task (checklists, children, dependencies, comments, history)
-- \`PATCH /tasks/{ref}\` any field, plus \`add_ac\`, \`check_ac\`, \`uncheck_ac\`, \`remove_ac\`, \`edit_ac\` [{index,text}],
+- \`GET /tasks/{ref}\` full task (checklists, children, dependencies, comments, status_history, attachments, activity)
+- \`PATCH /tasks/{ref}\` any field (\`status\` + \`reason\`; \`reason\` alone updates it), plus \`add_ac\`, \`check_ac\`, \`uncheck_ac\`, \`remove_ac\`, \`edit_ac\` [{index,text}],
   \`set_ac\`, \`reorder_ac\` (same for \`_dod\`), \`append_notes\`, \`append_plan\`, \`add_labels\`, \`remove_labels\`,
   \`add_deps\`, \`remove_deps\`, \`parent\` (ref or null)
 - \`POST /tasks/{ref}/archive|restore|promote|demote\`, \`GET|POST /tasks/{ref}/comments\` \`{body}\`
-- \`DELETE /tasks/{ref}\` (archived only), \`POST /tasks/move\` \`{ref, status?, before_ref?, after_ref?}\`,
-  \`POST /tasks/cleanup\` \`{older_than_days}\`
+- \`GET /tasks/{ref}/history\` the status trail: \`[{from,to,reason,actor,created_at}]\`, oldest first
+- \`GET|POST /tasks/{ref}/attachments\` (multipart \`file\` + \`caption\`, or JSON \`{data_base64, filename?, caption?}\`),
+  \`GET|PATCH|DELETE /tasks/{ref}/attachments/{id}\` (GET returns the image; PATCH \`{caption}\`)
+- \`DELETE /tasks/{ref}\` (archived only), \`POST /tasks/move\` \`{ref, status?, reason?, before_ref?, after_ref?}\`,
+  \`POST /tasks/cleanup\` \`{older_than_days}\` (archives Done and Cancelled)
+- Statuses: To Do, In Progress, Blocked, Done, Cancelled. Blocked and Cancelled need a \`reason\`
+  (\`GET /settings\` has the live list: \`reason_statuses\`, \`closed_statuses\`). Blocked work: \`GET /tasks?status=Blocked\`
 
 Other
 - \`GET|POST /milestones\`, \`/documents\`, \`/decisions\`; \`GET|PATCH|DELETE /{kind}/{ref}\`; \`POST /{kind}/{ref}/archive|restore\`

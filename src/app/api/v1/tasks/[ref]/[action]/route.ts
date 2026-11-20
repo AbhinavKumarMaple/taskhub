@@ -25,8 +25,9 @@ export const POST = api<P>(async ({ req, access, params }) => {
   return fn(access, params.ref);
 });
 
-/** GET /tasks/{ref}/comments */
+/** GET /tasks/{ref}/comments | /tasks/{ref}/history (the status trail, oldest first) */
 export const GET = api<P>(async ({ access, params }) => {
-  if (params.action !== "comments") throw new NotFound(`Unknown action "${params.action}"`);
-  return (await svc.getTask(access, params.ref)).comments;
+  if (params.action === "comments") return (await svc.getTask(access, params.ref)).comments;
+  if (params.action === "history") return (await svc.getTask(access, params.ref)).statusHistory;
+  throw new NotFound(`Unknown action "${params.action}"`);
 });

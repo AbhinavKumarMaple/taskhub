@@ -10,7 +10,13 @@ import * as svc from "@/server/service";
 
 export const metadata: Metadata = { title: "Statistics" };
 
-const TONE_BAR: Record<string, string> = { todo: "bg-todo", progress: "bg-progress", done: "bg-done" };
+const TONE_BAR: Record<string, string> = {
+  todo: "bg-todo",
+  progress: "bg-progress",
+  done: "bg-done",
+  blocked: "bg-danger",
+  cancelled: "bg-fg-subtle",
+};
 
 function currentQuery(sp: SearchParamsRecord): string {
   const q = new URLSearchParams();
@@ -50,13 +56,17 @@ export default async function StatisticsPage({ searchParams }: PageProps<"/stati
             </span>
           }
         />
-        <StatCard label="Waiting" value={stats.waiting.length} hint={`${pluralize(stats.waiting.length, "task")} labelled waiting`} />
+        <StatCard
+          label="Blocked or waiting"
+          value={stats.waiting.length}
+          hint={`${pluralize(stats.waiting.length, "task")} in ${settings.stoppedStatuses.join("/") || "a stopped status"} or labelled waiting`}
+        />
         <StatCard label="Last 8 weeks" value={`${weekCreated} / ${weekDone}`} hint="created / completed" />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
         <Panel title="By status">
-          <CountBars rows={stats.byStatus} tone={(name) => TONE_BAR[statusTone(name, settings.statuses)] ?? "bg-fg-subtle"} />
+          <CountBars rows={stats.byStatus} tone={(name) => TONE_BAR[statusTone(name, settings.statuses, settings)] ?? "bg-fg-subtle"} />
         </Panel>
         <Panel title="By type">
           <CountBars rows={stats.byType} />
@@ -71,12 +81,12 @@ export default async function StatisticsPage({ searchParams }: PageProps<"/stati
       </Panel>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Waiting">
+        <Panel title="Blocked or waiting">
           <TaskMiniList
             items={stats.waiting}
             hrefFor={sheetHref}
             statuses={settings.statuses}
-            empty="Nothing is waiting. Add the waiting label to a task that is blocked on someone else."
+            empty="Nothing is blocked. Move a task to Blocked (with the reason) when it cannot go on."
           />
         </Panel>
         <Panel title="Oldest open">

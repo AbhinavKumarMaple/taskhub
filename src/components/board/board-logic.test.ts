@@ -27,6 +27,8 @@ function task(ref: string, status: string, ordinal: number, milestone: string | 
     isDraft: false,
     title: ref,
     status,
+    statusReason: "",
+    statusChangedAt: new Date(0),
     type: "feature",
     priority: null,
     labels: [],

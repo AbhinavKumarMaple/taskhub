@@ -154,6 +154,8 @@ export type MoveAction = {
   ordinal: number;
   /** undefined = milestone unchanged; null = cleared. */
   milestone?: { ref: string; title: string } | null;
+  /** Reason given for a move into Blocked/Cancelled. */
+  reason?: string;
 };
 
 /** useOptimistic reducer: apply a move to the task list. */
@@ -164,6 +166,7 @@ export function applyMove(tasks: TaskSummary[], m: MoveAction): TaskSummary[] {
           ...t,
           status: m.status,
           ordinal: m.ordinal,
+          ...(m.status !== t.status ? { statusReason: m.reason ?? "", statusChangedAt: new Date() } : {}),
           ...(m.milestone !== undefined ? { milestone: m.milestone } : {}),
         }
       : t,

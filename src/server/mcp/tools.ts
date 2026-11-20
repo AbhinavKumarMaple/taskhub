@@ -34,7 +34,11 @@ const date = z.string().nullable().describe("YYYY-MM-DD, or null to clear");
 const taskFields = {
   title: z.string().optional(),
   description: z.string().optional().describe("Markdown"),
-  status: z.string().optional(),
+  status: z.string().optional().describe("To Do | In Progress | Blocked | Done | Cancelled (see space_info)"),
+  reason: z
+    .string()
+    .optional()
+    .describe("Why: required when moving to Blocked or Cancelled (what stopped it / why dropped); kept in the status history"),
   type: z.string().optional().describe("feature | sub-feature | fix | minor (see space_info)"),
   priority: z.string().nullable().optional(),
   labels: strs.optional().describe("Replaces all labels"),
@@ -286,6 +290,7 @@ export function registerTools(server: McpServer, getAccess: GetAccess) {
     {
       ref,
       status: z.string().optional(),
+      reason: z.string().optional().describe("Required when moving to Blocked or Cancelled"),
       before_ref: z.string().optional().describe("Place directly above this task"),
       after_ref: z.string().optional().describe("Place directly below this task"),
       ordinal: z.number().optional(),

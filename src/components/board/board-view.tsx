@@ -14,7 +14,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Archive, Flag, KanbanSquare, MoreHorizontal, Plus } from "lucide-react";
+import { Archive, ChevronsLeftRight, ChevronsRightLeft, Flag, KanbanSquare, MoreHorizontal, Plus } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   startTransition,
@@ -25,6 +25,7 @@ import {
   useOptimistic,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
 } from "react";
 import { addCardAction, boardVersionAction, cleanupDoneAction, moveCardAction } from "@/app/(app)/board/actions";
@@ -56,6 +57,7 @@ import {
   type Placement,
 } from "./board-logic";
 import { CardBody, SortableCard, cardClass } from "./board-card";
+import { StatusReasonDialog, type ReasonRequest } from "@/components/task/status-reason-dialog";
 
 const POLL_MS = 5000;
 
@@ -74,6 +76,12 @@ export type BoardViewProps = {
   error: string | null;
   statuses: string[];
   doneStatus: string;
+  /** Finished statuses (Done, Cancelled); the ones other than done start collapsed. */
+  closedStatuses: string[];
+  /** Dropping a card into one of these asks for a reason. */
+  reasonStatuses: string[];
+  /** Open-but-stopped statuses (Blocked): shown in red, counted on parent cards. */
+  stoppedStatuses: string[];
   milestones: { ref: string; title: string; spaceId: string }[];
   spaces: SpaceRef[];
   /** Selected Space id, or undefined for All Spaces. */
@@ -88,11 +96,60 @@ const TONE_DOT: Record<string, string> = {
   todo: "bg-todo",
   progress: "bg-progress",
   done: "bg-done",
+  blocked: "bg-danger",
+  cancelled: "bg-fg-subtle",
   neutral: "bg-fg-subtle",
 };
 
+const COLLAPSE_KEY = "taskhub.board.collapsed";
+
+/** Which columns are folded into a narrow strip. Default: closed statuses other than done (Cancelled). */
+const collapseStore = {
+  subscribe(cb: () => void) {
+    window.addEventListener("storage", cb);
+    window.addEventListener(COLLAPSE_KEY, cb);
+    return () => {
+      window.removeEventListener("storage", cb);
+      window.removeEventListener(COLLAPSE_KEY, cb);
+    };
+  },
+  get(): string | null {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY);
+    } catch {
+      return null; // private window: defaults
+    }
+  },
+};
+
+function useCollapsed(defaults: string[]) {
+  const raw = useSyncExternalStore(collapseStore.subscribe, collapseStore.get, () => null);
+  const overrides = useMemo(() => {
+    try {
+      return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+    } catch {
+      return {};
+    }
+  }, [raw]);
+  const isCollapsed = (status: string) => overrides[status] ?? defaults.includes(status);
+  const toggle = (status: string) => {
+    const next = { ...overrides, [status]: !isCollapsed(status) };
+    try {
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(new Event(COLLAPSE_KEY));
+  };
+  return { isCollapsed, toggle };
+}
+
 export function BoardView(props: BoardViewProps) {
-  const { tasks, error, statuses, doneStatus, milestones, spaces, space, grouped, filters, version } = props;
+  const { tasks, error, statuses, doneStatus, closedStatuses, reasonStatuses, stoppedStatuses, milestones, spaces, space, grouped, filters, version } =
+    props;
+  const roles = useMemo(() => ({ doneStatus, closedStatuses, stoppedStatuses }), [doneStatus, closedStatuses, stoppedStatuses]);
+  const { isCollapsed, toggle: toggleCollapsed } = useCollapsed(closedStatuses.filter((st) => st !== doneStatus));
+  const [reasonReq, setReasonReq] = useState<(ReasonRequest & { end: Placement; start: Placement | null }) | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -179,6 +236,15 @@ export function BoardView(props: BoardViewProps) {
   };
 
   const persistMove = (end: Placement, start: Placement | null) => {
+    const cur = byRef.get(end.ref);
+    if (cur && end.status !== cur.status && reasonStatuses.includes(end.status)) {
+      setReasonReq({ ref: end.ref, title: cur.title, from: cur.status, to: end.status, end, start });
+      return;
+    }
+    saveMove(end, start);
+  };
+
+  const saveMove = (end: Placement, start: Placement | null, reason?: string) => {
     const laneChanged = grouped && start && start.lane !== end.lane;
     const milestoneRef = laneChanged ? (end.lane === NO_MILESTONE ? null : end.lane) : undefined;
     const milestone =
@@ -189,11 +255,12 @@ export function BoardView(props: BoardViewProps) {
           : { ref: milestoneRef, title: milestones.find((m) => m.ref === milestoneRef)?.title ?? milestoneRef };
     const ordinal = optimisticOrdinal(optimisticTasks, end, byRef.get(end.ref)?.ordinal ?? 0);
     startTransition(async () => {
-      addOptimistic({ ref: end.ref, status: end.status, ordinal, milestone });
+      addOptimistic({ ref: end.ref, status: end.status, ordinal, milestone, reason });
       try {
         const res = await moveCardAction({
           ref: end.ref,
           status: end.status,
+          reason,
           beforeRef: end.beforeRef,
           afterRef: end.beforeRef ? undefined : end.afterRef,
           milestone: milestoneRef,
@@ -259,7 +326,7 @@ export function BoardView(props: BoardViewProps) {
       const laneIdx = Math.floor(col / n);
       const lane = lanes[laneIdx];
       if (!lane) return;
-      const counts = statuses.map((s) => itemsRef.current[containerId(lane.key, s)]?.length ?? 0);
+      const counts = statuses.map((s) => (isCollapsed(s) ? 0 : (itemsRef.current[containerId(lane.key, s)]?.length ?? 0)));
       let target = arrowTarget(counts, col % n, index, key);
       let targetLane = laneIdx;
       // Up/down past the end of a lane: jump to the same column in the next/previous lane with cards.
@@ -279,7 +346,7 @@ export function BoardView(props: BoardViewProps) {
         ?.querySelector<HTMLElement>(`[data-col="${targetLane * n + target.col}"][data-index="${target.index}"]`)
         ?.focus();
     },
-    [lanes, statuses, n],
+    [lanes, statuses, n, isCollapsed],
   );
 
   // ── Column actions ───────────────────────────────────────────────────────
@@ -324,16 +391,21 @@ export function BoardView(props: BoardViewProps) {
           {/* Columns share the width; the board scrolls sideways only when n × 264 px does not fit. */}
           <div
             className="grid w-full gap-x-3 gap-y-2"
-            style={{ gridTemplateColumns: `repeat(${n}, minmax(264px, 1fr))` }}
+            style={{ gridTemplateColumns: statuses.map((st) => (isCollapsed(st) ? "44px" : "minmax(248px, 1fr)")).join(" ") }}
           >
             {statuses.map((status) => (
               <ColumnHeader
                 key={status}
                 status={status}
-                tone={statusTone(status, statuses)}
+                tone={statusTone(status, statuses, roles)}
                 count={countIn(status)}
-                isDone={status === doneStatus}
-                onAdd={() => setAdding(containerId(lanes[0].key, status))}
+                isClosed={closedStatuses.includes(status)}
+                collapsed={isCollapsed(status)}
+                onToggle={() => toggleCollapsed(status)}
+                onAdd={() => {
+                  if (isCollapsed(status)) toggleCollapsed(status);
+                  setAdding(containerId(lanes[0].key, status));
+                }}
                 onCleanup={() => setCleanupOpen(true)}
               />
             ))}
@@ -349,6 +421,16 @@ export function BoardView(props: BoardViewProps) {
                 {statuses.map((status, si) => {
                   const cid = containerId(lane.key, status);
                   const refs = items[cid] ?? [];
+                  if (isCollapsed(status))
+                    return (
+                      <CollapsedColumn
+                        key={cid}
+                        id={cid}
+                        label={grouped ? `${status}, ${lane.title}` : status}
+                        count={refs.length}
+                        onExpand={() => toggleCollapsed(status)}
+                      />
+                    );
                   return (
                     <Column key={cid} id={cid} label={grouped ? `${status}, ${lane.title}` : status} empty={refs.length === 0} dragging={!!activeRef}>
                       {adding === cid && (
@@ -372,6 +454,8 @@ export function BoardView(props: BoardViewProps) {
                               task={t}
                               showSpace={showSpace}
                               showMilestone={!grouped}
+                              reasonStatuses={reasonStatuses}
+                              stoppedStatuses={stoppedStatuses}
                               col={li * n + si}
                               index={i}
                               selected={selected === ref}
@@ -402,13 +486,27 @@ export function BoardView(props: BoardViewProps) {
         <DragOverlay dropAnimation={null}>
           {activeTask ? (
             <div className={cn(cardClass, "w-[264px] cursor-grabbing shadow-[var(--shadow-pop)] ring-1 ring-accent")}>
-              <CardBody task={activeTask} showSpace={showSpace} showMilestone={!grouped} />
+              <CardBody
+                task={activeTask}
+                showSpace={showSpace}
+                showMilestone={!grouped}
+                reasonStatuses={reasonStatuses}
+                stoppedStatuses={stoppedStatuses}
+              />
             </div>
           ) : null}
         </DragOverlay>
       </DndContext>
 
-      <CleanupDialog open={cleanupOpen} onClose={() => setCleanupOpen(false)} doneStatus={doneStatus} space={space} />
+      <CleanupDialog open={cleanupOpen} onClose={() => setCleanupOpen(false)} closedStatuses={closedStatuses} space={space} />
+      <StatusReasonDialog
+        request={reasonReq}
+        onCancel={() => setReasonReq(null)}
+        onConfirm={(reason) => {
+          if (reasonReq) saveMove(reasonReq.end, reasonReq.start, reason);
+          setReasonReq(null);
+        }}
+      />
     </div>
   );
 }
@@ -419,17 +517,34 @@ function ColumnHeader({
   status,
   tone,
   count,
-  isDone,
+  isClosed,
+  collapsed,
+  onToggle,
   onAdd,
   onCleanup,
 }: {
   status: string;
   tone: string;
   count: number;
-  isDone: boolean;
+  isClosed: boolean;
+  collapsed: boolean;
+  onToggle: () => void;
   onAdd: () => void;
   onCleanup: () => void;
 }) {
+  if (collapsed)
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        title={`Show ${status} (${count})`}
+        aria-label={`Show the ${status} column, ${pluralize(count, "card")}`}
+        className="flex h-8 items-center justify-center gap-1 rounded-md text-fg-subtle outline-none hover:bg-surface-3 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <span className={cn("size-2 shrink-0 rounded-full", TONE_DOT[tone] ?? TONE_DOT.neutral)} aria-hidden />
+        <ChevronsLeftRight className="size-3.5" aria-hidden />
+      </button>
+    );
   return (
     <div className="flex h-8 items-center gap-2 px-1">
       <span className={cn("size-2 shrink-0 rounded-full", TONE_DOT[tone] ?? TONE_DOT.neutral)} aria-hidden />
@@ -447,8 +562,9 @@ function ColumnHeader({
           triggerClassName="h-6 min-w-6"
           items={[
             { label: "Add task", icon: <Plus />, onSelect: onAdd },
-            ...(isDone
-              ? (["separator", { label: `Clean up ${status}…`, icon: <Archive />, onSelect: onCleanup }] as const)
+            { label: "Collapse column", icon: <ChevronsRightLeft />, onSelect: onToggle },
+            ...(isClosed
+              ? (["separator", { label: "Clean up finished tasks…", icon: <Archive />, onSelect: onCleanup }] as const)
               : []),
           ]}
         />
@@ -517,6 +633,31 @@ function Column({
           {dragging ? "Drop here" : "No cards"}
         </p>
       )}
+    </section>
+  );
+}
+
+/** A folded column: a narrow drop strip with the status name written down it. */
+function CollapsedColumn({ id, label, count, onExpand }: { id: string; label: string; count: number; onExpand: () => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <section
+      ref={setNodeRef}
+      aria-label={`${label} (collapsed)`}
+      className={cn(
+        "flex min-h-24 min-w-0 flex-col items-center rounded-lg bg-surface-2/60 py-2 transition-colors",
+        isOver && "bg-accent-soft/60",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onExpand}
+        className="flex flex-col items-center gap-2 rounded-md px-1 py-1 text-xs text-fg-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
+        title={`Show ${label}`}
+      >
+        <span className="tabular-nums text-fg-subtle">{count}</span>
+        <span className="font-medium [writing-mode:vertical-rl]">{label}</span>
+      </button>
     </section>
   );
 }
@@ -636,14 +777,15 @@ function AddCardForm({
 function CleanupDialog({
   open,
   onClose,
-  doneStatus,
+  closedStatuses,
   space,
 }: {
   open: boolean;
   onClose: () => void;
-  doneStatus: string;
+  closedStatuses: string[];
   space?: string;
 }) {
+  const names = closedStatuses.join(" or ");
   const toast = useToast();
   const [days, setDays] = useState("14");
   const [pending, setPending] = useState(false);
@@ -663,7 +805,7 @@ function CleanupDialog({
       const count = res.data.archived.length;
       toast.success(
         count ? `Archived ${pluralize(count, "task")}` : "Nothing to clean up",
-        count ? res.data.archived.join(", ") : `No ${doneStatus} tasks older than ${pluralize(n, "day")}.`,
+        count ? res.data.archived.join(", ") : `No ${names} tasks older than ${pluralize(n, "day")}.`,
       );
       onClose();
     } finally {
@@ -676,8 +818,8 @@ function CleanupDialog({
       open={open}
       onClose={onClose}
       size="sm"
-      title={`Clean up ${doneStatus}`}
-      description={`Archives ${doneStatus} tasks (with their sub-tasks) last updated more than this many days ago${space ? " in this Space" : " in every Space"}. You can restore them from the Archive.`}
+      title="Clean up finished tasks"
+      description={`Archives ${names} tasks (with their sub-tasks) last updated more than this many days ago${space ? " in this Space" : " in every Space"}. You can restore them from the Archive.`}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={pending}>

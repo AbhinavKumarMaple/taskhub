@@ -46,7 +46,7 @@ async function withProgress(
     .select({
       id: tasks.milestoneId,
       total: sql<number>`count(*)::int`,
-      done: sql<number>`(count(*) filter (where ${tasks.status} = ${settings.doneStatus}))::int`,
+      done: sql<number>`(count(*) filter (where ${inArray(tasks.status, settings.closedStatuses)}))::int`,
     })
     .from(tasks)
     .where(

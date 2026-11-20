@@ -3,10 +3,12 @@ import { alias } from "drizzle-orm/pg-core";
 import { getDb, type DbOrTx } from "../db";
 import {
   activity,
+  attachments,
   checklistItems,
   comments,
   milestones,
   spaces,
+  statusEvents,
   taskDependencies,
   tasks,
   type FieldChanges,
@@ -31,10 +33,12 @@ import {
 import type {
   Access,
   Activity,
+  Attachment,
   ChecklistItem,
   Comment,
   DepNode,
   Settings,
+  StatusEvent,
   TaskFull,
   TaskList,
   TaskLite,
@@ -145,6 +149,8 @@ async function summarize(q: DbOrTx, rows: SummaryRow[], settings: Settings): Pro
       isDraft: t.isDraft,
       title: t.title,
       status: t.status,
+      statusReason: t.statusReason,
+      statusChangedAt: t.statusChangedAt,
       type: t.type,
       priority: t.priority,
       labels: t.labels,
@@ -161,7 +167,7 @@ async function summarize(q: DbOrTx, rows: SummaryRow[], settings: Settings): Pro
       dodTotal: dod?.total ?? 0,
       childCounts,
       childTotal,
-      childDone: childCounts[settings.doneStatus] ?? 0,
+      childDone: settings.closedStatuses.reduce((n, st) => n + (childCounts[st] ?? 0), 0),
     };
   });
 }
@@ -357,7 +363,7 @@ async function directDepRefs(q: DbOrTx, taskId: number): Promise<string[]> {
 async function loadFull(q: DbOrTx, access: Access, ref: string): Promise<TaskFull> {
   const t = await loadTask(q, access, ref);
   const settings = await loadSettings(q);
-  const [[summary], checks, childRows, parentRow, edges, commentRows, activityRows] = await Promise.all([
+  const [[summary], checks, childRows, parentRow, edges, commentRows, activityRows, trailRows, fileRows] = await Promise.all([
     summariesByIds(q, [t.id], settings),
     q.select().from(checklistItems).where(eq(checklistItems.taskId, t.id)).orderBy(asc(checklistItems.position), asc(checklistItems.id)),
     baseSelect(q).where(eq(tasks.parentId, t.id)).orderBy(refSortKey),
@@ -377,6 +383,18 @@ async function loadFull(q: DbOrTx, access: Access, ref: string): Promise<TaskFul
       )
       .orderBy(desc(activity.id))
       .limit(100),
+    // Same rule as activity: trail steps recorded in Spaces the caller does not hold stay hidden.
+    q
+      .select()
+      .from(statusEvents)
+      .where(
+        and(
+          eq(statusEvents.taskId, t.id),
+          access.spaces === "all" ? undefined : inArray(statusEvents.spaceId, access.spaces),
+        ),
+      )
+      .orderBy(asc(statusEvents.id)),
+    q.select(attachmentMetaCols).from(attachments).where(eq(attachments.taskId, t.id)).orderBy(asc(attachments.id)),
   ]);
   const involved = new Set<number>();
   for (const e of edges) {
@@ -411,8 +429,29 @@ async function loadFull(q: DbOrTx, access: Access, ref: string): Promise<TaskFul
     comments: commentRows.map(
       (c): Comment => ({ id: c.id, author: c.author, body: c.body, createdAt: c.createdAt }),
     ),
+    statusHistory: trailRows.map(
+      (e): StatusEvent => ({ id: e.id, from: e.fromStatus, to: e.toStatus, reason: e.reason, actor: e.actor, createdAt: e.createdAt }),
+    ),
+    attachments: fileRows.map((a) => toAttachment(t.ref, a)),
     activity: activityRows as Activity[],
   };
+}
+
+/** Attachment columns without the bytes. */
+export const attachmentMetaCols = {
+  id: attachments.id,
+  filename: attachments.filename,
+  contentType: attachments.contentType,
+  size: attachments.size,
+  width: attachments.width,
+  height: attachments.height,
+  caption: attachments.caption,
+  actor: attachments.actor,
+  createdAt: attachments.createdAt,
+};
+
+export function toAttachment(ref: string, a: Omit<Attachment, "url">): Attachment {
+  return { ...a, url: `/api/v1/tasks/${ref}/attachments/${a.id}` };
 }
 
 /** Full task: checklists, children, deps both ways (transitive), comments, activity. */
@@ -430,6 +469,44 @@ function checkVocab(settings: Settings, v: { status?: string; type?: string; pri
   if (v.priority !== undefined && v.priority !== null && !settings.priorities.includes(v.priority))
     throw new Invalid(`Unknown priority "${v.priority}". Use one of: ${settings.priorities.join(", ")}`);
 }
+
+type StatusSet = Pick<Partial<typeof tasks.$inferInsert>, "status" | "statusReason" | "statusChangedAt">;
+
+/**
+ * Validates a status change (or a reason edit) and writes the trail step. Moving into a reason status
+ * (Blocked, Cancelled) needs a reason. Returns the task columns to set ({} when nothing changes).
+ * `cur` null = a new task getting its first status.
+ */
+async function applyStatus(
+  tx: DbOrTx,
+  access: Access,
+  settings: Settings,
+  task: { id: number; spaceId: string },
+  cur: { status: string; statusReason: string } | null,
+  to: string,
+  reason: string | undefined,
+): Promise<StatusSet> {
+  const why = (reason ?? "").trim();
+  const changed = !cur || cur.status !== to;
+  if (changed && settings.reasonStatuses.includes(to) && !why)
+    throw new Invalid(`Moving to "${to}" needs a reason: send "reason" with the status (what stopped it, or why it was dropped)`);
+  if (!changed && (reason === undefined || why === cur.statusReason)) return {};
+  await tx.insert(statusEvents).values({
+    taskId: task.id,
+    spaceId: task.spaceId,
+    fromStatus: cur ? cur.status : null,
+    toStatus: to,
+    reason: why,
+    actor: access.actor || "chat",
+  });
+  return changed ? { status: to, statusReason: why, statusChangedAt: new Date() } : { statusReason: why };
+}
+
+/** " — reason" for activity summaries. */
+const because = (why: string | undefined) => {
+  const w = (why ?? "").trim();
+  return w ? ` — ${w.length > 120 ? w.slice(0, 117) + "…" : w}` : "";
+};
 
 async function resolveMilestone(q: DbOrTx, access: Access, ref: string | null | undefined, spaceId: string) {
   if (ref === undefined) return undefined;
@@ -566,11 +643,14 @@ export async function createTask(access: Access, input: CreateTaskInput): Promis
       ref = `T-${Number(n)}`;
     }
 
+    if (settings.reasonStatuses.includes(status) && !(p.reason ?? "").trim())
+      throw new Invalid(`Creating a task in "${status}" needs a reason: send "reason"`);
     const [row] = await tx
       .insert(tasks)
       .values({
         ref,
         spaceId,
+        statusReason: (p.reason ?? "").trim(),
         parentId: parentRow?.id ?? null,
         isDraft: p.isDraft ?? false,
         title: p.title,
@@ -592,6 +672,7 @@ export async function createTask(access: Access, input: CreateTaskInput): Promis
       })
       .returning();
 
+    await applyStatus(tx, access, settings, row, null, status, p.reason);
     await writeChecklist(tx, row.id, "ac", (p.acceptanceCriteria ?? []).map((text) => ({ text, checked: false })));
     const dod = [...(p.noDodDefaults ? [] : settings.dodDefaults), ...(p.definitionOfDone ?? [])];
     await writeChecklist(tx, row.id, "dod", dod.map((text) => ({ text, checked: false })));
@@ -604,12 +685,13 @@ export async function createTask(access: Access, input: CreateTaskInput): Promis
     };
     if (row.priority) changes.priority = { from: null, to: row.priority };
     if (row.labels.length) changes.labels = { from: null, to: row.labels };
+    if (row.statusReason) changes.statusReason = { from: null, to: row.statusReason };
     await logActivity(tx, access, {
       spaceId,
       entityType: "task",
       entityRef: ref,
       action: "created",
-      summary: `Created ${p.isDraft ? "draft " : ""}${type} ${ref} "${row.title}"${parentRow ? ` under ${parentRow.ref}` : ""}`,
+      summary: `Created ${p.isDraft ? "draft " : ""}${type} ${ref} "${row.title}"${parentRow ? ` under ${parentRow.ref}` : ""}${status !== settings.defaultStatus ? ` in ${status}${because(p.reason)}` : ""}`,
       changes,
     });
     return ref;
@@ -622,7 +704,6 @@ export async function createTask(access: Access, input: CreateTaskInput): Promis
 const SCALARS = [
   "title",
   "description",
-  "status",
   "type",
   "priority",
   "labels",
@@ -759,6 +840,15 @@ export async function updateTask(access: Access, ref: string, input: UpdateTaskI
       if (JSON.stringify(before) !== JSON.stringify(after)) changes.dependsOn = { from: before, to: after };
     }
 
+    // Status + reason (validated, and written to the trail)
+    if (p.status !== undefined || p.reason !== undefined) {
+      const st = await applyStatus(tx, access, settings, { id: cur.id, spaceId: targetSpace }, cur, p.status ?? cur.status, p.reason);
+      if (st.status !== undefined) changes.status = { from: cur.status, to: st.status };
+      if (st.statusReason !== undefined && st.statusReason !== cur.statusReason)
+        changes.statusReason = { from: cur.statusReason || null, to: st.statusReason || null };
+      Object.assign(set, st);
+    }
+
     if (!Object.keys(changes).length) return cur.ref;
 
     const statusChanged = !!changes.status;
@@ -775,8 +865,10 @@ export async function updateTask(access: Access, ref: string, input: UpdateTaskI
       entityRef: cur.ref,
       action: statusChanged ? "status" : "updated",
       summary: statusChanged
-        ? `${cur.ref} "${(next.title as string) ?? cur.title}": ${cur.status} → ${p.status}${fields.length > 1 ? ` (also ${fieldList(fields.filter((f) => f !== "status"))})` : ""}`
-        : `Updated ${cur.ref} (${fieldList(fields)})`,
+        ? `${cur.ref} "${(next.title as string) ?? cur.title}": ${cur.status} → ${p.status}${because(p.reason)}${fields.some((f) => f !== "status" && f !== "statusReason") ? ` (also ${fieldList(fields.filter((f) => f !== "status" && f !== "statusReason"))})` : ""}`
+        : changes.statusReason && fields.length === 1
+          ? `${cur.ref} reason for ${cur.status}${because(p.reason) || ": cleared"}`
+          : `Updated ${cur.ref} (${fieldList(fields)})`,
       changes,
     });
     return cur.ref;
@@ -917,13 +1009,16 @@ export async function moveTask(access: Access, input: MoveTaskInput): Promise<Ta
       ordinal = (await compute()) ?? (await endOfColumn(tx, cur.spaceId, status));
     }
 
-    if (status === cur.status && ordinal === cur.ordinal) return cur.id;
+    const st = await applyStatus(tx, access, settings, cur, cur, status, p.reason);
+    if (status === cur.status && ordinal === cur.ordinal && !Object.keys(st).length) return cur.id;
     const changes: FieldChanges = {};
     if (status !== cur.status) changes.status = { from: cur.status, to: status };
+    if (st.statusReason !== undefined && st.statusReason !== cur.statusReason)
+      changes.statusReason = { from: cur.statusReason || null, to: st.statusReason || null };
     changes.ordinal = { from: cur.ordinal, to: ordinal };
     await tx
       .update(tasks)
-      .set({ status, ordinal, ...(status !== cur.status ? { updatedAt: new Date() } : {}) })
+      .set({ ...st, ordinal, ...(Object.keys(st).length ? { updatedAt: new Date() } : {}) })
       .where(eq(tasks.id, cur.id));
     await logActivity(tx, access, {
       spaceId: cur.spaceId,
@@ -932,7 +1027,7 @@ export async function moveTask(access: Access, input: MoveTaskInput): Promise<Ta
       action: status !== cur.status ? "status" : "moved",
       summary:
         status !== cur.status
-          ? `${cur.ref} "${cur.title}": ${cur.status} → ${status}`
+          ? `${cur.ref} "${cur.title}": ${cur.status} → ${status}${because(p.reason)}`
           : `Reordered ${cur.ref} in ${status}`,
       changes,
     });
@@ -945,7 +1040,7 @@ export async function moveTask(access: Access, input: MoveTaskInput): Promise<Ta
 /** Put tasks in exactly this order (and optionally this status). */
 export async function reorderTasks(
   access: Access,
-  input: { status?: string; refs: string[] },
+  input: { status?: string; reason?: string; refs: string[] },
 ): Promise<TaskSummary[]> {
   const p = parse(reorderTasksInput, input);
   const ids = await withTx(async (tx) => {
@@ -956,9 +1051,10 @@ export async function reorderTasks(
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const status = p.status ?? r.status;
+      const st = status !== r.status ? await applyStatus(tx, access, settings, r, r, status, p.reason) : {};
       await tx
         .update(tasks)
-        .set({ ordinal: (i + 1) * STEP, status, ...(status !== r.status ? { updatedAt: new Date() } : {}) })
+        .set({ ordinal: (i + 1) * STEP, ...st, ...(status !== r.status ? { updatedAt: new Date() } : {}) })
         .where(eq(tasks.id, r.id));
       if (!bySpace.has(r.spaceId)) bySpace.set(r.spaceId, []);
       bySpace.get(r.spaceId)!.push(r.ref);
@@ -1080,7 +1176,7 @@ export const promoteDraft = (access: Access, ref: string) => setDraft(access, re
 /** Task → draft (no-op if already a draft). */
 export const demoteTask = (access: Access, ref: string) => setDraft(access, ref, true);
 
-/** Archive tasks in the done status last updated more than `olderThanDays` days ago. */
+/** Archive finished tasks (done or cancelled) last updated more than `olderThanDays` days ago. */
 export async function cleanupDone(
   access: Access,
   input: { olderThanDays: number; spaces?: string[] },
@@ -1095,7 +1191,7 @@ export async function cleanupDone(
       .where(
         and(
           spaceScope(access, tasks.spaceId, p.spaces),
-          eq(tasks.status, settings.doneStatus),
+          inArray(tasks.status, settings.closedStatuses),
           isNull(tasks.archivedAt),
           eq(tasks.isDraft, false),
           lt(tasks.updatedAt, cutoff),
@@ -1152,8 +1248,9 @@ export async function exportBoardMarkdown(access: Access, filters: ListTasksInpu
     const bits = [t.type, t.priority, t.space.name, ...t.labels.map((l) => `#${l}`)].filter(Boolean);
     const progress = t.acTotal ? ` · AC ${t.acDone}/${t.acTotal}` : "";
     const kids = t.childTotal ? ` · ${t.childDone}/${t.childTotal} sub-tasks done` : "";
-    const box = t.status === settings.doneStatus ? "x" : " ";
-    return `${indent}- [${box}] **${t.ref}** ${t.title} (${bits.join(", ")})${progress}${kids}`;
+    const box = t.status === settings.doneStatus ? "x" : settings.closedStatuses.includes(t.status) ? "-" : " ";
+    const why = settings.reasonStatuses.includes(t.status) && t.statusReason ? ` · ${t.status}: ${t.statusReason}` : "";
+    return `${indent}- [${box}] **${t.ref}** ${t.title} (${bits.join(", ")})${progress}${kids}${why}`;
   };
   const out: string[] = [`# Board`, "", `_Exported ${new Date().toISOString().slice(0, 10)}_`, ""];
   for (const status of settings.statuses) {

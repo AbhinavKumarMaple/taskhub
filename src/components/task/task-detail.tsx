@@ -40,6 +40,10 @@ import { href, taskHref, withParams } from "@/lib/nav";
 import type { TaskFull } from "@/lib/types";
 import type { UpdateTaskInput } from "@/server/validation";
 import { ActivityTimeline } from "./activity-timeline";
+import { Attachments } from "./attachments";
+import { StatusReasonDialog, type ReasonRequest } from "./status-reason-dialog";
+import { StatusTrail } from "./status-trail";
+import { StatusReason } from "@/components/board/board-card";
 import { Checklist } from "./checklist";
 import { Comments } from "./comments";
 import { Dependencies, RefPicker } from "./dependencies";
@@ -77,6 +81,7 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
   const [confirm, setConfirm] = useState<null | "delete" | { spaceId: string }>(null);
   const [busy, setBusy] = useState(false);
   const [pickingParent, setPickingParent] = useState(false);
+  const [reasonReq, setReasonReq] = useState<ReasonRequest | null>(null);
 
   const linkFor = (r: string) => (mode === "sheet" ? withParams(sp, { task: r }, pathname) : taskHref(r, space));
   const fullHref = taskHref(ref, space);
@@ -147,6 +152,18 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
     else router.replace(href("/archive", {}, space));
   };
 
+  /** Status select: a status that needs a reason asks for one first. */
+  const changeStatus = (to: string) => {
+    if (to === task.status) return;
+    if (settings.reasonStatuses.includes(to)) setReasonReq({ ref, title: task.title, from: task.status, to });
+    else void save({ status: to });
+  };
+  const inReasonStatus = settings.reasonStatuses.includes(task.status);
+  const stopped = settings.stoppedStatuses.includes(task.status);
+  const resumeTo = settings.statuses.find(
+    (st) => st !== settings.defaultStatus && !settings.reasonStatuses.includes(st) && !settings.closedStatuses.includes(st),
+  ) ?? settings.defaultStatus;
+
   const archived = !!task.archivedAt;
   const statusOptions = withCurrent(settings.statuses, task.status);
   const typeOptions = withCurrent(settings.types, task.type);
@@ -193,6 +210,29 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
 
   const banners = (
     <>
+      {inReasonStatus && (
+        <div className="flex flex-wrap items-start gap-2">
+          <StatusReason
+            status={task.status}
+            reason={task.statusReason}
+            since={task.statusChangedAt}
+            stopped={stopped}
+            className="mt-0 min-w-0 flex-1 px-2.5 py-2 text-[13px]"
+          />
+          <div className="flex shrink-0 gap-1.5">
+            <Button
+              size="xs"
+              variant="secondary"
+              onClick={() => setReasonReq({ ref, title: task.title, from: task.status, to: task.status, initial: task.statusReason })}
+            >
+              Edit reason
+            </Button>
+            <Button size="xs" variant="secondary" onClick={() => void save({ status: resumeTo })}>
+              {stopped ? `Unblock → ${resumeTo}` : `Reopen → ${resumeTo}`}
+            </Button>
+          </div>
+        </div>
+      )}
       {archived && (
         <Banner
           text={`Archived ${formatDate(task.archivedAt)}. It is hidden from the board and lists.`}
@@ -226,7 +266,7 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
           selectSize="sm"
           value={task.status}
           options={statusOptions.map((s) => ({ value: s, label: s }))}
-          onChange={(e) => save({ status: e.target.value })}
+          onChange={(e) => changeStatus(e.target.value)}
         />
       </PropRow>
       <PropRow label="Type" htmlFor={`${ref}-type`}>
@@ -476,6 +516,8 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
   );
 
   const activity = <ActivityTimeline items={task.activity} />;
+  const trail = <StatusTrail events={task.statusHistory} settings={settings} />;
+  const screenshots = <Attachments taskRef={ref} items={task.attachments} onChanged={reload} />;
 
   const dates = (
     <p className="text-xs text-fg-subtle">
@@ -510,6 +552,15 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
         message="Its subtasks move with it. The milestone is cleared and dependencies on tasks in other Spaces are removed."
         confirmLabel="Move"
       />
+      <StatusReasonDialog
+        request={reasonReq}
+        onCancel={() => setReasonReq(null)}
+        onConfirm={async (reason) => {
+          const to = reasonReq?.to;
+          setReasonReq(null);
+          if (to) await save({ status: to, reason });
+        }}
+      />
     </>
   );
 
@@ -526,9 +577,11 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
         {checklists}
         {subtasks}
         {dependencies}
+        {screenshots}
         {writeups}
         {lists}
         {comments}
+        {trail}
         {activity}
         {dates}
         {dialogs}
@@ -548,6 +601,7 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <aside className="flex min-w-0 flex-col gap-6 lg:order-last lg:border-l lg:border-border lg:pl-6">
           <Section title="Properties">{properties}</Section>
+          {trail}
           {lists}
           {dates}
         </aside>
@@ -556,6 +610,7 @@ export function TaskDetail({ data: incoming, mode = "page", onDeleted }: TaskDet
           {checklists}
           {subtasks}
           {dependencies}
+          {screenshots}
           {writeups}
           {comments}
           {activity}

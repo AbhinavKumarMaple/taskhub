@@ -6,6 +6,7 @@ import {
   doublePrecision,
   index,
   integer,
+  customType,
   jsonb,
   pgSequence,
   pgTable,
@@ -35,6 +36,12 @@ export const settings = pgTable("settings", {
   id: integer("id").primaryKey().default(1),
   statuses: textArray("statuses"),
   defaultStatus: text("default_status").notNull(),
+  /** The "completed" status (ticks the box, counts as done). Empty = the last status (rows from before 0002). */
+  doneStatus: text("done_status").notNull().default(""),
+  /** Statuses that count as finished: excluded from "open", count toward a parent's progress, cleaned up. */
+  closedStatuses: textArray("closed_statuses"),
+  /** Moving into one of these needs a reason (Blocked, Cancelled). */
+  reasonStatuses: textArray("reason_statuses"),
   types: textArray("types"),
   priorities: textArray("priorities"),
   labels: textArray("labels"),
@@ -98,6 +105,9 @@ export const tasks = pgTable(
     references: textArray("references"),
     documentation: textArray("documentation"),
     modifiedFiles: textArray("modified_files"),
+    /** Why it is in its current status (required for reason statuses, cleared on leaving them). */
+    statusReason: text("status_reason").notNull().default(""),
+    statusChangedAt: ts("status_changed_at").notNull().defaultNow(),
     ordinal: doublePrecision("ordinal").notNull().default(0),
     childCounter: integer("child_counter").notNull().default(0),
     createdAt: ts("created_at").notNull().defaultNow(),
@@ -154,6 +164,51 @@ export const comments = pgTable(
   (t) => [index("comments_task_idx").on(t.taskId)],
 );
 
+/** One row per status change (and per reason edit): the task's status trail. */
+export const statusEvents = pgTable(
+  "status_events",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    spaceId: text("space_id").notNull(),
+    /** Null for the first status a task got. */
+    fromStatus: text("from_status"),
+    toStatus: text("to_status").notNull(),
+    reason: text("reason").notNull().default(""),
+    actor: text("actor").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("status_events_task_idx").on(t.taskId, t.id)],
+);
+
+const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
+  dataType: () => "bytea",
+  fromDriver: (v) => (Buffer.isBuffer(v) ? v : Buffer.from(v)),
+});
+
+/** Screenshots on tasks. Bytes live in Postgres; list queries never select `data`. */
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    caption: text("caption").notNull().default(""),
+    actor: text("actor").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("attachments_task_idx").on(t.taskId)],
+);
+
 export const documents = pgTable(
   "documents",
   {
@@ -205,6 +260,7 @@ export const ACTIVITY_ACTIONS = [
   "promoted",
   "demoted",
   "moved",
+  "attached",
 ] as const;
 
 export type FieldChanges = Record<string, { from: unknown; to: unknown }>;
@@ -243,5 +299,6 @@ export type CommentRow = typeof comments.$inferSelect;
 export type MilestoneRow = typeof milestones.$inferSelect;
 export type DocumentRow = typeof documents.$inferSelect;
 export type DecisionRow = typeof decisions.$inferSelect;
+export type StatusEventRow = typeof statusEvents.$inferSelect;
 export type ActivityRow = typeof activity.$inferSelect;
 export type SettingsRow = typeof settings.$inferSelect;

@@ -71,6 +71,7 @@ export const decisionHref = (ref: string, space?: string | null) => href(`/decis
 export const NAV_ITEMS = [
   { key: "board", label: "Board", path: "/board", params: { type: "feature" } },
   { key: "tasks", label: "All tasks", path: "/tasks" },
+  { key: "blocked", label: "Blocked", path: "/tasks", params: { status: "Blocked", sort: "updated" } },
   { key: "drafts", label: "Drafts", path: "/drafts" },
   { key: "archive", label: "Archive", path: "/archive" },
   { key: "milestones", label: "Milestones", path: "/milestones" },

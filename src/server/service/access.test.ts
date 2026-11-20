@@ -72,7 +72,7 @@ describe("access isolation", () => {
     const statsB = await svc.statistics(chatA, { spaces: [B.space.id] });
     expect(statsB.total).toBe(0);
     const counts = await svc.getNavCounts(chatA, { spaces: [B.space.id] });
-    expect(counts).toEqual({ board: 0, tasks: 0, drafts: 0, archive: 0, milestones: 0, documents: 0, decisions: 0 });
+    expect(counts).toEqual({ board: 0, tasks: 0, blocked: 0, drafts: 0, archive: 0, milestones: 0, documents: 0, decisions: 0 });
     expect(await svc.exportBoardMarkdown(chatA, { spaces: [B.space.id] })).not.toContain("zebra");
 
     // modify

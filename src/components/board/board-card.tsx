@@ -2,24 +2,31 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarDays, Flag, GitBranch } from "lucide-react";
+import { Ban, CalendarDays, Flag, GitBranch, OctagonPause } from "lucide-react";
 import { memo, type KeyboardEvent, type Ref } from "react";
 import { LabelChip, PriorityMarker, SpaceChip, TypeChip } from "@/components/ui/chip";
 import { ProgressRing } from "@/components/ui/misc";
 import { cn } from "@/lib/cn";
-import { formatDue, relativeTime } from "@/lib/format";
+import { durationSince, formatDue, relativeTime } from "@/lib/format";
 import type { TaskSummary } from "@/lib/types";
 
 type CardBodyProps = {
   task: TaskSummary;
   showSpace: boolean;
   showMilestone: boolean;
+  /** Statuses whose reason the card shows (Blocked, Cancelled). */
+  reasonStatuses?: string[];
+  /** Open-but-stopped statuses (Blocked): red reason, counted among children. */
+  stoppedStatuses?: string[];
 };
 
 /** What a card shows. Used by the sortable card and by the drag overlay. */
-export function CardBody({ task: t, showSpace, showMilestone }: CardBodyProps) {
+export function CardBody({ task: t, showSpace, showMilestone, reasonStatuses = [], stoppedStatuses = [] }: CardBodyProps) {
   const due = formatDue(t.dueDate);
   const showChildren = t.childTotal > 0;
+  const stopped = stoppedStatuses.includes(t.status);
+  const showReason = reasonStatuses.includes(t.status);
+  const childStopped = stoppedStatuses.reduce((n, st) => n + (t.childCounts[st] ?? 0), 0);
   return (
     <>
       <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-fg-subtle">
@@ -33,6 +40,8 @@ export function CardBody({ task: t, showSpace, showMilestone }: CardBodyProps) {
       </div>
 
       <p className="mt-1.5 line-clamp-3 text-[13px] font-medium leading-snug text-fg">{t.title}</p>
+
+      {showReason && <StatusReason status={t.status} reason={t.statusReason} since={t.statusChangedAt} stopped={stopped} />}
 
       {(t.labels.length > 0 || (showMilestone && t.milestone)) && (
         <div className="mt-2 flex flex-wrap gap-1">
@@ -52,7 +61,7 @@ export function CardBody({ task: t, showSpace, showMilestone }: CardBodyProps) {
       )}
 
       {showChildren && (
-        <div className="mt-2 flex items-center gap-2" title={`${t.childDone} of ${t.childTotal} sub-tasks done`}>
+        <div className="mt-2 flex items-center gap-2" title={`${t.childDone} of ${t.childTotal} sub-tasks finished${childStopped ? `, ${childStopped} blocked` : ""}`}>
           <GitBranch className="size-3 shrink-0 text-fg-subtle" aria-hidden />
           <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-3">
             <div
@@ -62,8 +71,14 @@ export function CardBody({ task: t, showSpace, showMilestone }: CardBodyProps) {
           </div>
           <span className="text-[11px] tabular-nums text-fg-muted">
             {t.childDone}/{t.childTotal}
-            <span className="sr-only"> sub-tasks done</span>
+            <span className="sr-only"> sub-tasks finished</span>
           </span>
+          {childStopped > 0 && (
+            <span className="inline-flex h-[18px] items-center gap-1 rounded-full bg-danger-soft px-1.5 text-[11px] font-medium text-danger-soft-fg">
+              <OctagonPause className="size-3" aria-hidden />
+              {childStopped} blocked
+            </span>
+          )}
         </div>
       )}
 
@@ -91,6 +106,43 @@ export function CardBody({ task: t, showSpace, showMilestone }: CardBodyProps) {
         </span>
       </div>
     </>
+  );
+}
+
+/** "Blocked 3d: waiting on the API key" under the title. */
+export function StatusReason({
+  status,
+  reason,
+  since,
+  stopped,
+  className,
+}: {
+  status: string;
+  reason: string;
+  since: Date | string;
+  stopped: boolean;
+  className?: string;
+}) {
+  const Icon = stopped ? OctagonPause : Ban;
+  return (
+    <div
+      className={cn(
+        "mt-2 flex items-start gap-1.5 rounded-md px-1.5 py-1 text-[12px] leading-snug",
+        stopped ? "bg-danger-soft text-danger-soft-fg" : "bg-surface-2 text-fg-muted",
+        className,
+      )}
+    >
+      <Icon className="mt-px size-3.5 shrink-0" aria-hidden />
+      <p className="min-w-0 line-clamp-3">
+        <span className="font-medium">
+          {status}{" "}
+          <time dateTime={new Date(since).toISOString()} title={`Since ${new Date(since).toLocaleString()}`} suppressHydrationWarning>
+            {durationSince(since)}
+          </time>
+        </span>
+        {reason ? <>: {reason}</> : <span className="opacity-70"> (no reason given)</span>}
+      </p>
+    </div>
   );
 }
 
@@ -134,6 +186,8 @@ export const SortableCard = memo(function SortableCard({
   task,
   showSpace,
   showMilestone,
+  reasonStatuses,
+  stoppedStatuses,
   col,
   index,
   selected,
@@ -167,7 +221,7 @@ export const SortableCard = memo(function SortableCard({
       data-col={col}
       data-index={index}
       aria-roledescription="Draggable card"
-      aria-label={`${task.ref} ${task.title}, ${task.status}`}
+      aria-label={`${task.ref} ${task.title}, ${task.status}${task.statusReason && reasonStatuses?.includes(task.status) ? `: ${task.statusReason}` : ""}`}
       aria-current={selected || undefined}
       className={cn(
         cardClass,
@@ -176,7 +230,13 @@ export const SortableCard = memo(function SortableCard({
         isDragging && "opacity-40",
       )}
     >
-      <CardBody task={task} showSpace={showSpace} showMilestone={showMilestone} />
+      <CardBody
+        task={task}
+        showSpace={showSpace}
+        showMilestone={showMilestone}
+        reasonStatuses={reasonStatuses}
+        stoppedStatuses={stoppedStatuses}
+      />
     </div>
   );
 });

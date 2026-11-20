@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { buttonClass } from "@/components/ui/button";
-import { LabelChip, PriorityMarker, SpaceChip, StatusChip, TypeChip } from "@/components/ui/chip";
+import { LabelChip, PriorityMarker, SpaceChip, StatusChip, TypeChip, statusTone } from "@/components/ui/chip";
 import { ProgressRing, RelTime } from "@/components/ui/misc";
 import { cn } from "@/lib/cn";
 
@@ -131,8 +131,16 @@ export function TasksTable({
                 <td className="px-3 py-2">
                   <RefLink href={sheetHref(t.ref)}>{t.ref}</RefLink>
                 </td>
-                <td className="truncate px-3 py-2 font-medium" title={t.title}>
-                  {t.title}
+                <td className="px-3 py-2" title={t.title}>
+                  <div className="truncate font-medium">{t.title}</div>
+                  {t.statusReason && ["blocked", "cancelled"].includes(statusTone(t.status, statuses)) && (
+                    <div
+                      className={cn("truncate text-xs", statusTone(t.status, statuses) === "blocked" ? "text-danger-soft-fg" : "text-fg-subtle")}
+                      title={`${t.status}: ${t.statusReason}`}
+                    >
+                      {t.statusReason}
+                    </div>
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   <StatusChip status={t.status} statuses={statuses} size="xs" />
